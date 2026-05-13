@@ -1,6 +1,13 @@
+import os
+
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, Timer
+
+# When cocotb runs against the post-synthesis gate-level netlist, internal
+# hierarchical signals are flattened away. The Tiny Tapeout Makefile sets
+# GATES=yes in that mode, which we use to skip RTL-only assertions.
+GL_TEST = os.environ.get("GATES", "no").lower() == "yes"
 
 
 @cocotb.test()
@@ -55,6 +62,13 @@ async def test_dot4_with_receipt(dut):
     # ~= 14-20 cycles. Existing tb.v uses the same budget.
     for _ in range(64):
         await RisingEdge(dut.clk)
+
+    if GL_TEST:
+        dut._log.info(
+            "SKIP test_dot4_with_receipt internal assertions: GATES=yes "
+            "(post-synthesis netlist has internal signals flattened)."
+        )
+        return
 
     # Drill into the master FSM via the hierarchical path. cocotb exposes the
     # registers of u_master through the top-level dut.
