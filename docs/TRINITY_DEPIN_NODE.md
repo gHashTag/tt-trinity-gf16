@@ -179,13 +179,61 @@ the compute fabric works in silicon. The DePIN product board adds:
 The five gates below define the order of work. They map 1:1 to the
 README roadmap section.
 
-| Gate | Deliverable                                                       |
-|------|-------------------------------------------------------------------|
-| G1   | USB-3 FIFO loopback on a dev FPGA + FT601 breakout                |
-| G2   | UART/USB packet parser (byte stream ↔ 32-bit Trinity packet)     |
-| G3   | 2× node mesh demo over the radio adapter (point-to-point first)   |
-| G4   | TRI receipt verifier (host SW + on-die receipt emission)          |
-| G5   | Custom Trinity DePIN carrier board (FPGA + FT601 + radio)         |
+| Gate | Deliverable                                                       | Status (TRI-NET-G1)        |
+|------|-------------------------------------------------------------------|----------------------------|
+| G0   | TT GDS green on `feat/trinity-mesh-v0`                            | placement-fix applied      |
+| G1   | USB-3 FIFO loopback on a dev FPGA + FT601 breakout                | GREEN in sim (100/100)     |
+| G2   | UART/USB packet parser (byte stream ↔ 32-bit Trinity packet)     | GREEN in sim (100/100)     |
+| G3   | 2× node mesh demo over the radio adapter (point-to-point first)   | spec frozen; hardware HOLD |
+| G4   | TRI receipt verifier (host SW + on-die receipt emission)          | GREEN (7/7 unit + 100/100) |
+| G5   | Custom Trinity DePIN carrier board (FPGA + FT601 + radio)         | schematic spec frozen      |
+
+### TRI-NET-G1 Pre-Registration
+
+The boundary work for gates G1..G5 above was driven by mission **TRI-NET-G1**.
+Pre-registered acceptance criteria, falsification rule, and evidence map are:
+
+* **H1 primary hypothesis**: a CPU-less Trinity FPGA node can act as a packet-
+  compute endpoint where (a) the PC sends a 32-bit Trinity job stream over
+  USB-3 FIFO, (b) the FPGA routes it through the on-chip mesh to a GF16/ternary
+  tile, and (c) returns a deterministic RESULT/RECEIPT packet without any
+  Linux, soft CPU, AXI, or new hardware multiplier in the compute core.
+* **Falsification witness**: H1 is FALSE if any G1 loopback fails to reproduce
+  the canonical result `0x47C0`, or if the path requires Linux / soft CPU /
+  AXI / new arithmetic multipliers inside the compute core.
+* **Witness status (2026-05-13)**: NOT HIT. 100/100 deterministic loopbacks
+  passed in `sim/g1_loopback/`. No Linux, no soft CPU, no AXI, no new
+  multipliers were introduced in any synthesizable RTL touched by this PR
+  (`grep -n '\*' src/trinity_*.v boards/qmtech_a100t/*.v` returns only
+  pre-existing operators inside `gf16_mul.v` legacy substrate).
+
+### Evidence artifacts
+
+| Gate | Evidence file                                                    |
+|------|------------------------------------------------------------------|
+| G0   | `info.yaml` tiles `2x2`, `src/config.json` density 45            |
+| G1   | `sim/g1_loopback/g1_loopback.log` — `G1_GATE_GREEN: 100/100`     |
+| G2   | `host/g2_receipts.jsonl` — 100 receipts, all `status: pass`      |
+| G3   | `docs/boards/G3_MESH_ADAPTER_SPEC.md` — boundary contract        |
+| G4   | `tools/receipt_verifier/test_g4_verifier.py` — 7/7 PASS;         |
+|      |   `host/g4_verified.jsonl` — 100/100 `verifier_status: verified` |
+| G5   | `docs/boards/G5_CARRIER_BOARD_SPEC.md` — schematic checklist     |
+
+### Reproduction commands
+
+```bash
+# G1 USB-3 loopback gate (Icarus Verilog)
+cd sim/g1_loopback && make
+
+# G2 host packet tool (sim backend; ftd3xx backend requires real FT601)
+python3 host/trinity_packet_tool.py --backend sim --jobs 100 \
+    --out host/g2_receipts.jsonl
+
+# G4 verifier gate (unit + replay against G2 stream)
+python3 tools/receipt_verifier/test_g4_verifier.py
+python3 tools/receipt_verifier/tri_receipt_verifier.py \
+    -i host/g2_receipts.jsonl -o host/g4_verified.jsonl
+```
 
 ## 8. Hard constraints (recap, will not be violated)
 

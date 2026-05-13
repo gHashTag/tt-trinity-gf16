@@ -55,8 +55,16 @@ module trinity_usb3_fifo_bridge (
     // ---- Bus direction ----
     // Read from FT60x when it has data AND we can forward it on. Otherwise default
     // to "drive FPGA->host" so we can issue WR# when we have a packet to send.
-    wire do_read  = (~ft_rxf_n) && (~host_in_valid || host_in_ready);
-    wire do_write = (~ft_txe_n) &&  host_out_valid;
+    //
+    // Half-duplex arbitration: ft_data is bidirectional and OE# is shared, so the
+    // bridge MUST NOT read and write in the same cycle. We round-robin: a sticky
+    // `dir_write` toggle flips after every accepted transfer so a steady stream of
+    // host operands cannot starve the result drain (and vice versa).
+    reg  dir_write;
+    wire can_read  = (~ft_rxf_n) && (~host_in_valid || host_in_ready);
+    wire can_write = (~ft_txe_n) &&  host_out_valid;
+    wire do_read   = can_read  && (!can_write || !dir_write);
+    wire do_write  = can_write && (!can_read  ||  dir_write);
 
     assign ft_oe_n  = ~do_read;             // OE# low when reading
     assign ft_rd_n  = ~do_read;             // RD# low for one cycle per word (skeleton)
@@ -70,6 +78,7 @@ module trinity_usb3_fifo_bridge (
         if (!rst_n) begin
             host_in_pkt   <= {`TRN_PKT_W{1'b0}};
             host_in_valid <= 1'b0;
+            dir_write     <= 1'b0;
         end else begin
             // Accepted by router -> drop valid
             if (host_in_valid && host_in_ready)
@@ -78,6 +87,9 @@ module trinity_usb3_fifo_bridge (
             if (do_read) begin
                 host_in_pkt   <= ft_data;
                 host_in_valid <= 1'b1;
+                dir_write     <= 1'b1;   // give writer a turn next cycle
+            end else if (do_write) begin
+                dir_write     <= 1'b0;   // give reader a turn next cycle
             end
         end
     end
