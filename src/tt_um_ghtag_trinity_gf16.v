@@ -199,6 +199,184 @@ module tt_um_ghtag_trinity_gf16 (
         .crc_final(crc_final)
     );
 
+    // ==================================================================
+    // Wave-26b SUPER-CROWN modules (L-S10..L-S18) — 8×2 tile expansion
+    // ==================================================================
+
+    // L-S10: 16×16 ternary matmul (JEPA-T tier)
+    reg  [511:0] mm16_a, mm16_b;
+    reg          mm16_start;
+    wire         mm16_done, mm16_ok;
+    wire [2047:0] mm16_c;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            mm16_a <= 512'b0;
+            mm16_b <= 512'b0;
+            mm16_start <= 1'b1;
+        end else mm16_start <= 1'b0;
+    end
+    vsa_matmul_16x16 u_mm16 (
+        .clk(clk), .rst_n(rst_n),
+        .start(mm16_start),
+        .a_flat(mm16_a), .b_flat(mm16_b),
+        .done(mm16_done), .c_flat(mm16_c),
+        .matmul_ok(mm16_ok)
+    );
+
+    // L-S11: BitNet encoder
+    reg  [127:0] enc_x;
+    reg          enc_start;
+    wire         enc_done, enc_ok;
+    wire [63:0]  enc_y;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            enc_x <= 128'b0;
+            enc_start <= 1'b1;
+        end else enc_start <= 1'b0;
+    end
+    bitnet_encoder u_enc (
+        .clk(clk), .rst_n(rst_n),
+        .start(enc_start), .x_in(enc_x),
+        .done(enc_done), .y_out(enc_y),
+        .encoder_ok(enc_ok)
+    );
+
+    // L-S12: BPB counter (fed by canned scoring pulses)
+    wire bpb_ok;
+    wire [23:0] bpb_total;
+    wire [15:0] bpb_samples;
+    reg [3:0] bpb_tick;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) bpb_tick <= 4'd0;
+        else if (bpb_tick != 4'hF) bpb_tick <= bpb_tick + 4'd1;
+    end
+    bpb_counter u_bpb (
+        .clk(clk), .rst_n(rst_n),
+        .valid(bpb_tick == 4'd5),
+        .pred_class(mesh_rcpt_checksum),
+        .true_class(8'hC1),
+        .total_loss(bpb_total),
+        .sample_count(bpb_samples),
+        .bpb_ok(bpb_ok)
+    );
+
+    // L-S13: BLAKE3-mini RECEIPT signer
+    reg [511:0] hash_in;
+    reg         hash_start;
+    wire        hash_done, hash_ok;
+    wire [255:0] hash_digest;
+    reg hash_kicked;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            hash_in     <= 512'b0;
+            hash_start  <= 1'b0;
+            hash_kicked <= 1'b0;
+        end else if (mesh_rcpt_valid && !hash_kicked) begin
+            hash_in <= {448'b0,
+                        mesh_rcpt_checksum, mesh_rcpt_job_id,
+                        {6'b0, mesh_rcpt_tile_id}, 8'hA5,
+                        crc_final};
+            hash_start  <= 1'b1;
+            hash_kicked <= 1'b1;
+        end else begin
+            hash_start <= 1'b0;
+        end
+    end
+    blake3_anchor u_hash (
+        .clk(clk), .rst_n(rst_n),
+        .start(hash_start), .m_in(hash_in),
+        .done(hash_done), .digest(hash_digest),
+        .hash_ok(hash_ok)
+    );
+
+    // L-S14: multi-tile RECEIPT aggregator
+    wire all_attested, multi_rcpt_ok;
+    wire [7:0] agg_checksum, agg_job_id;
+    wire [3:0] attested_mask;
+    multi_tile_receipt u_mrcpt (
+        .clk(clk), .rst_n(rst_n),
+        .t0_valid(mesh_rcpt_valid),
+        .t0_checksum(mesh_rcpt_checksum),
+        .t0_job_id(mesh_rcpt_job_id),
+        // Tiles 1..3 share the same source for now (single-mesh demo); when full
+        // multi-tile master FSM lands in next wave, these get distinct feeds.
+        .t1_valid(mesh_rcpt_valid),
+        .t1_checksum(mesh_rcpt_checksum),
+        .t1_job_id(mesh_rcpt_job_id),
+        .t2_valid(mesh_rcpt_valid),
+        .t2_checksum(mesh_rcpt_checksum),
+        .t2_job_id(mesh_rcpt_job_id),
+        .t3_valid(mesh_rcpt_valid),
+        .t3_checksum(mesh_rcpt_checksum),
+        .t3_job_id(mesh_rcpt_job_id),
+        .agg_checksum(agg_checksum),
+        .agg_job_id(agg_job_id),
+        .attested_mask(attested_mask),
+        .all_attested(all_attested),
+        .multi_rcpt_ok(multi_rcpt_ok)
+    );
+
+    // L-S15: Trinity ternary ALU-9 decoder (combinational demo, fed by hwrng)
+    wire [1:0] alu_result;
+    wire       alu_valid, alu_ok;
+    alu9_decoder u_alu (
+        .opcode(hwrng_word[3:0]),
+        .a(hwrng_word[5:4]),
+        .b(hwrng_word[7:6]),
+        .result(alu_result),
+        .valid(alu_valid),
+        .decoder_ok(alu_ok)
+    );
+
+    // L-S16: RING27 ternary memory (shift every 8 clocks, fed by ALU result)
+    reg [2:0] ring_shift_cnt;
+    wire ring_ok;
+    wire [1:0] ring_rd;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) ring_shift_cnt <= 3'b0;
+        else        ring_shift_cnt <= ring_shift_cnt + 3'b1;
+    end
+    ring27_memory u_ring (
+        .clk(clk), .rst_n(rst_n),
+        .shift(ring_shift_cnt == 3'd0),
+        .wr_en(alu_valid && (ring_shift_cnt == 3'd4)),
+        .addr(hwrng_word[12:8] % 5'd27),
+        .wr_data(alu_result),
+        .rd_data(ring_rd),
+        .ring_ok(ring_ok)
+    );
+
+    // L-S17: phi-PLL fractional divider
+    wire phi_tick;
+    wire [2:0] phi_state;
+    wire phi_div_ok;
+    phi_pll_div u_phi_div (
+        .clk(clk), .rst_n(rst_n),
+        .phi_tick(phi_tick),
+        .state(phi_state),
+        .phi_div_ok(phi_div_ok)
+    );
+
+    // L-S18: Wishbone-lite full peripheral (probe-only on TT pins; no host bus exposed)
+    wire [7:0] wb_dat_r;
+    wire wb_ack, wb_ok;
+    wishbone_full u_wb (
+        .clk(clk), .rst_n(rst_n),
+        .wb_cyc(1'b0), .wb_stb(1'b0), .wb_we(1'b0),
+        .wb_adr(4'b0), .wb_dat_w(8'b0),
+        .wb_dat_r(wb_dat_r), .wb_ack(wb_ack),
+        .status_byte(status_byte),
+        .matmul_lo(mm16_c[7:0]),
+        .rcpt_chk(agg_checksum),
+        .bpb_lo(bpb_total[7:0]),
+        .wb_ok(wb_ok)
+    );
+
+    // SUPER-CROWN aggregate health bit (all 9 new modules online)
+    wire super_crown_ok =
+        mm16_ok & enc_ok & bpb_ok & hash_ok & multi_rcpt_ok &
+        alu_ok  & ring_ok & phi_div_ok & wb_ok;
+
     // Output mux: combinational dot result by default, mesh result once produced.
     wire [15:0] final_result = mesh_result_valid ? mesh_result : dot_out;
 
@@ -213,11 +391,21 @@ module tt_um_ghtag_trinity_gf16 (
     // testbench via the master FSM directly (not via TT pins, which are
     // exhausted by the legacy dot4/mesh result mux); they MUST be folded
     // into _unused here so synthesis keeps the registers.
-    wire _unused = &{1'b0, mesh_dbg_tile0, ena,
+    wire _unused = &{1'b0, mesh_dbg_tile0, ena, uio_in,
                      mesh_rcpt_checksum, mesh_rcpt_job_id,
                      mesh_rcpt_tile_id, mesh_rcpt_valid,
                      lucas_val, vsa_done, vsa_c,
                      crc_raw, crc_final,
-                     hwrng_word[14:0], 1'b0};
+                     hwrng_word[14:0],
+                     mm16_done, mm16_c[2047:8],
+                     enc_done, enc_y,
+                     bpb_total[23:8], bpb_samples,
+                     hash_done, hash_digest,
+                     all_attested, agg_job_id, attested_mask,
+                     alu_result, alu_valid,
+                     ring_rd, phi_tick, phi_state,
+                     wb_dat_r, wb_ack,
+                     super_crown_ok,
+                     ui_in[7:4], 1'b0};
 
 endmodule
