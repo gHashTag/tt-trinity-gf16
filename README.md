@@ -77,5 +77,43 @@ This v0 keeps the existing TT pinout and synthesises stand-alone. To target a bo
 2. Host I/O later: replace the canned master FSM with a UART / USB-UART RX→packet parser (RX byte stream → 32-bit packet) and TX driver (RESULT packet → bytes). FSM module stays; only the operand source changes.
 3. Future Trinity CPU integration: replace `trinity_master_fsm.v` with the Trinity CPU's instruction-fetch unit and let it issue the same 32-bit packets directly.
 
+## Trinity DePIN node — honest scope
+The end-goal product is a small FPGA-centric node that runs ternary / GF16
+compute jobs, emits deterministic receipts, and is paid in **TRI** tokens by
+peers in a mesh — a Helium-style DePIN, but for compute. This repo is **step 0**
+of that path: only the on-die packet fabric is real. USB-3 host I/O, external
+radios, multi-hop mesh routing, and TRI settlement are *not* implemented yet.
+The boundary contracts are documented in [docs/TRINITY_DEPIN_NODE.md](docs/TRINITY_DEPIN_NODE.md)
+and exposed by two synthesizable boundary stubs:
+
+- `src/trinity_usb3_fifo_bridge.v` — FT60x (FT600/FT601) synchronous-FIFO shim
+  to the Trinity 32-bit packet handshake. Skeleton-only: real FT601 timing,
+  byte-enables, and CDC are marked TODO. Not wired into the TT top (TinyTapeout
+  has no FT60x pins).
+- `src/trinity_mesh_adapter_stub.v` — pass-through boundary to an external
+  radio / backhaul module (LoRa / ESP32 / etc.). No LoRa/Wi-Fi PHY in fabric.
+  Not wired into the TT top.
+
+Receipt-format constants for off-chip TRI settlement (`compute_job_id`,
+`tile_id`, `op_code`, `result`, `nonce`, `checksum`) are reserved in
+[`src/trinity_packet.vh`](src/trinity_packet.vh) — see the `TRN_RCPT_*`
+block. Tiles do NOT emit receipts in v0; constants are committed so gate
+G4 can light them up without renumbering.
+
+## Roadmap — next gates
+
+| Gate | Deliverable                                                           | Status      |
+|------|-----------------------------------------------------------------------|-------------|
+| G0   | On-die 32-bit packet fabric + 4 GF16 tiles + CPU-less FSM             | **done (PR #2)** |
+| G1   | USB-3 FIFO loopback on dev FPGA + FT601 breakout                      | planned     |
+| G2   | UART/USB packet parser (byte stream ↔ 32-bit Trinity packet)         | planned     |
+| G3   | 2× node mesh demo over the external radio adapter                     | planned     |
+| G4   | TRI receipt verifier (host SW + on-die receipt emission)              | planned     |
+| G5   | Custom Trinity DePIN carrier board (FPGA + FT601 + radio)             | planned     |
+
+Until G3 is demonstrated on real hardware, this project will NOT claim a full
+external mesh implementation, and the term "ternary internet" stays a
+design-doc concept, not a product claim.
+
 ## License
 Apache-2.0
