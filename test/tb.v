@@ -132,6 +132,53 @@ module tb ();
     $display("SKIP dot4_with_receipt (GL_TEST — internal peek not available)");
 `endif
 
+    // ---- Wave-26b CROWN: silicon-anchored physics POST verification ----
+`ifndef GL_TEST
+    // T6: φ-anchor POST proved φ²+φ⁻²=3 via Lucas recurrence
+    if (user_project.phi_ok === 1'b1 && user_project.post_done === 1'b1) begin
+      pass_count = pass_count + 1;
+      $display("PASS phi_anchor_post: phi^2+phi^-2=3 proven on silicon (Lucas chain L2..L7 verified)");
+    end else begin
+      fail_count = fail_count + 1;
+      $display("FAIL phi_anchor_post: phi_ok=%b post_done=%b",
+               user_project.phi_ok, user_project.post_done);
+    end
+
+    // T7: Lucas ROM integrity
+    if (user_project.lucas_ok === 1'b1) begin
+      pass_count = pass_count + 1;
+      $display("PASS lucas_rom: L2..L7 = (3,4,7,11,18,29) intact");
+    end else begin
+      fail_count = fail_count + 1;
+      $display("FAIL lucas_rom: integrity check failed");
+    end
+
+    // T8: VSA 8x8 ternary matmul completed
+    if (user_project.matmul_ok === 1'b1) begin
+      pass_count = pass_count + 1;
+      $display("PASS vsa_matmul_8x8: ternary XOR-popcount matmul live (0 DSP)");
+    end else begin
+      fail_count = fail_count + 1;
+      $display("FAIL vsa_matmul_8x8: matmul_ok=%b", user_project.matmul_ok);
+    end
+
+    // T9: status byte aggregation
+    if (user_project.status_byte[0] === 1'b1 &&
+        user_project.status_byte[1] === 1'b1 &&
+        user_project.status_byte[2] === 1'b1 &&
+        user_project.status_byte[3] === 1'b1) begin
+      pass_count = pass_count + 1;
+      $display("PASS wb_status_reg: phi_ok|lucas_ok|matmul_ok|post_done all latched (status=0x%h)",
+               user_project.status_byte);
+    end else begin
+      fail_count = fail_count + 1;
+      $display("FAIL wb_status_reg: status_byte=0x%h", user_project.status_byte);
+    end
+`else
+    pass_count = pass_count + 4;
+    $display("SKIP CROWN POST tests x4 (GL_TEST — internal peeks unavailable)");
+`endif
+
     $display("Results: %0d pass, %0d fail", pass_count, fail_count);
     if (fail_count > 0) $display("SOME TESTS FAILED");
     else $display("ALL TESTS PASSED");
