@@ -1,0 +1,31 @@
+{
+  "DESIGN_NAME": "sacred_alu",
+  "VERILOG_FILES": ["src/sacred_alu_top.v"],
+  "CLOCK_PORT": "clk",
+  "CLOCK_PERIOD": 3.846,
+  "PDK": "sky130A",
+  "STD_CELL_LIBRARY": "sky130_fd_sc_hd",
+  "DIE_AREA": "0 0 220 220",
+  "FP_CORE_UTIL": 0.8,
+  "TARGET_FMAX_MHZ": 260,
+  "NO_MULTIPLIERS": true,
+  "SYNTH_NO_FLAT": false,
+  "SYNTH_STRATEGY": "AREA 0",
+  "PL_TARGET_DENSITY": 0.8,
+  "GRT_ALLOW_CONGESTION": false,
+  "RUN_KLAYOUT": false,
+  "RUN_MAGIC": true,
+  "RUN_NETGEN": true,
+  "MAGIC_DRC_USE_GDS": true,
+  "QUIT_ON_MAGIC_DRC": true,
+  "QUIT_ON_LVS_ERROR": true,
+  "QUIT_ON_TIMING_VIOLATIONS": false,
+  "META": {
+    "doctrine_ref": "v23_§3",
+    "vector": "S-170",
+    "one_shot_issue": "trinity-fpga#88",
+    "charter_rule_2": "no * HW multipliers",
+    "r5_disclosure": "scaffold only — real run pending lab toolchain",
+    "anchor": "phi^2 + phi^-2 = 3 · QUANTUM BRAIN 1:1 SILICON · R20 · DOI 10.5281/zenodo.19227877 · NEVER STOP"
+  }
+}
