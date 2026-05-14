@@ -1,0 +1,40 @@
+# Makefile.trinity_merkle_agg — L-S45 Trinity Merkle Aggregator sim gate
+# Apache-2.0  |  DOI: 10.5281/zenodo.19227877
+#
+# Targets:
+#   make -f Makefile.trinity_merkle_agg          → compile + run + check
+#   make -f Makefile.trinity_merkle_agg golden   → regenerate Python golden ref
+#   make -f Makefile.trinity_merkle_agg clean    → remove build artefacts
+#
+# Requires: iverilog, vvp, python3
+
+ROOT  := .
+SRC   := $(ROOT)/src/trinity_merkle_agg.v
+TB    := $(ROOT)/sim/tri1_v2/tb_trinity_merkle_agg.v
+VVP   := trinity_merkle_agg.vvp
+LOG   := /tmp/merkle.log
+
+all: run
+
+$(VVP): $(SRC) $(TB)
+	iverilog -g2012 -Wall \
+	    -o $(VVP) \
+	    $(SRC) $(TB)
+
+run: $(VVP)
+	vvp $(VVP) | tee $(LOG)
+	@grep -q "TRINITY_MERKLE_AGG_GREEN" $(LOG) || \
+	    (echo "GATE FAILED — TRINITY_MERKLE_AGG_GREEN not found" && exit 1)
+	@echo "====================================="
+	@echo "TRINITY_MERKLE_AGG_GREEN  ✓  gate OK"
+	@echo "====================================="
+
+golden:
+	python3 $(ROOT)/sim/tri1_v2/gen_merkle_golden.py
+
+clean:
+	rm -f $(VVP) $(LOG) \
+	       $(ROOT)/sim/tri1_v2/merkle_stim.mem \
+	       $(ROOT)/sim/tri1_v2/merkle_gold.mem
+
+.PHONY: all run golden clean
