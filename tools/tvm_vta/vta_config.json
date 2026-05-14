@@ -1,0 +1,101 @@
+{
+  "_comment": "VTA ISA config for TRI-NET-G1 4x(2x2) PE-mesh — TT-Shuttle Squeeze v7 / S-51",
+  "_anchor": "phi^2 + phi^-2 = 3",
+  "_license": "Apache-2.0",
+  "isa_version": "trinity-v7.0",
+  "target": "trinity-pe-mesh",
+  "description": "TVM-VTA ISA for 4x(2x2) PE-mesh, ternary weight (2-bit), ternary input (2-bit)",
+
+  "pe_mesh": {
+    "num_groups": 4,
+    "group_rows": 2,
+    "group_cols": 2,
+    "total_pes": 16,
+    "comment": "4 groups of 2x2 PE tiles; dataflow weight-stationary or DDR-streaming"
+  },
+
+  "tile_w": 8,
+  "tile_h": 2,
+  "batch_size": 1,
+
+  "data_types": {
+    "input_bits": 2,
+    "weight_bits": 2,
+    "accum_bits": 16,
+    "output_bits": 8,
+    "input_encoding": "ternary-signed-magnitude",
+    "weight_encoding": "ternary-2hot",
+    "comment": "2-bit ternary: encoding w in {-1,0,+1} as (sign,valid) per S-52 2-hot scheme"
+  },
+
+  "memory": {
+    "inp_buff_size": 2048,
+    "wgt_buff_size": 4096,
+    "acc_buff_size": 2048,
+    "inp_buff_banks": 2,
+    "wgt_buff_banks": 4,
+    "acc_buff_banks": 2,
+    "uop_buff_size": 256,
+    "comment": "Sizes in 16-bit words; wgt_buff 4-banked for streaming (S-7)"
+  },
+
+  "lanes_per_pe": 8,
+  "mac_per_cycle": 16,
+  "comment_mac": "16 PEs x 1 ternary-MAC each; ternary XNOR-popcount path per S-47/S-52",
+
+  "dataflow_modes": [
+    {
+      "name": "weight-stationary",
+      "code": 0,
+      "description": "Weights preloaded into wgt_buff; activations stream DDR→inp_buff; S-1 mode"
+    },
+    {
+      "name": "ddr-streaming",
+      "code": 1,
+      "description": "Both weights and activations streamed from DDR tile-by-tile; S-7 mode"
+    }
+  ],
+
+  "opcodes": [
+    {"name": "LOAD",       "code": "0x00", "description": "DMA load tile from DRAM to local buffer"},
+    {"name": "STORE",      "code": "0x01", "description": "DMA store tile from acc_buff to DRAM"},
+    {"name": "GEMM",       "code": "0x02", "description": "Ternary GEMM on PE-mesh (weight-stationary)"},
+    {"name": "GEMM_STREAM","code": "0x03", "description": "Ternary GEMM stream (DDR-streaming mode)"},
+    {"name": "ALU_ADD",    "code": "0x04", "description": "Element-wise add on acc_buff (BatchNorm bias)"},
+    {"name": "ALU_MUL",    "code": "0x05", "description": "Element-wise multiply (BatchNorm scale)"},
+    {"name": "ALU_RELU",   "code": "0x06", "description": "ReLU activation on acc_buff"},
+    {"name": "ALU_SIGN",   "code": "0x07", "description": "Ternary sign activation: out = sign(acc)"},
+    {"name": "SYNC",       "code": "0x08", "description": "Barrier synchronization between PE groups"},
+    {"name": "NOP",        "code": "0xFF", "description": "No operation / pipeline flush"}
+  ],
+
+  "schedule_knobs": {
+    "tile_w_choices":      [4, 8, 16],
+    "tile_h_choices":      [1, 2, 4],
+    "unroll_factor":       [1, 2, 4, 8],
+    "dataflow_choices":    ["weight-stationary", "ddr-streaming"],
+    "reorder_axes":        ["n-h-w-c", "n-c-h-w", "c-n-h-w"],
+    "comment":             "Search space for AutoTVM knobs in autotune_S51.py"
+  },
+
+  "autotvm": {
+    "target_string":      "llvm -model=trinity-pe-mesh",
+    "rpc_key":            "trinity-pe-mesh",
+    "n_trial":            200,
+    "early_stopping":     80,
+    "random_seed":        42,
+    "cost_model":         "xgboost",
+    "runner_timeout":     10,
+    "measure_option_local": true,
+    "comment":            "AutoTVM search config per S-51; seed pinned for DREAMPlace consistency"
+  },
+
+  "stability": {
+    "isa_version":        "trinity-v7.0",
+    "hash_algo":          "sha256",
+    "hash_file":          "tuned_schedule_hash.txt",
+    "log_file":           "tuned_log.json",
+    "reload_flag":        "--reload-cache",
+    "comment":            "ISA-stability ICA: if isa_version changes and hash differs, CI requires --reload-cache"
+  }
+}

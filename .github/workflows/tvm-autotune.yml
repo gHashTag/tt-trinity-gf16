@@ -1,0 +1,194 @@
+# Copyright 2024 Trinity / TRI-NET-G1 Contributors
+# Licensed under the Apache License, Version 2.0
+# Anchor: phi^2 + phi^-2 = 3 (TRINITY)
+# Stream: W15-TT-I / S-51 TVM-VTA AutoTVM
+# NOTE: AutoTVM throughput projection until silicon validated 2026-12-16 (R5 honesty)
+#
+# tvm-autotune.yml — GHA workflow for TVM-VTA AutoTVM pipeline.
+#
+# Steps:
+#   1. Run autotune (allowed-failure if TVM not installed)
+#   2. Report throughput and G-51 gate result
+#   3. Run ISA stability check (ICA-V7-TVM-ISA-STABILITY)
+#
+# TVM is treated as optional: the workflow continues (allow-failure) if
+# TVM is not installed, running in dry-run stub mode.
+
+name: TVM AutoTune (W15-TT-I / S-51)
+
+on:
+  push:
+    branches:
+      - "feat/tt-v7-tvm-vta"
+    paths:
+      - "tools/tvm_vta/**"
+      - ".github/workflows/tvm-autotune.yml"
+  pull_request:
+    branches:
+      - main
+      - "feat/tt-v7-tvm-vta"
+    paths:
+      - "tools/tvm_vta/**"
+  workflow_dispatch:
+    inputs:
+      n_trial:
+        description: "Number of AutoTVM trials"
+        required: false
+        default: "200"
+      reload_cache:
+        description: "Pass --reload-cache to ISA stability check"
+        required: false
+        default: "false"
+
+env:
+  SEED: "42"
+  ISA_VERSION: "trinity-v7.0"
+  LOG_FILE: "tools/tvm_vta/tuned_log.json"
+  HASH_FILE: "tools/tvm_vta/tuned_schedule_hash.txt"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: autotune
+  # ---------------------------------------------------------------------------
+  autotune:
+    name: AutoTVM Tuning (S-51)
+    runs-on: ubuntu-latest
+    continue-on-error: true  # allowed-failure if TVM not installed
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history for ISA stability git comparison
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies (numpy, xgboost)
+        run: |
+          pip install --upgrade pip
+          pip install numpy xgboost 2>/dev/null || true
+          echo "[INFO] numpy/xgboost install attempted."
+
+      - name: Attempt TVM install (allowed-failure)
+        id: tvm_install
+        continue-on-error: true
+        run: |
+          # Try to install TVM from wheel or PyPI; may not be available
+          pip install apache-tvm 2>/dev/null || \
+          pip install tvm 2>/dev/null || \
+          echo "TVM not available via pip — dry-run mode will be used."
+          python -c "import tvm; print('TVM version:', tvm.__version__)" 2>/dev/null || \
+          echo "TVM_AVAILABLE=false" >> "$GITHUB_ENV"
+
+      - name: Run AutoTVM driver
+        id: autotune_run
+        working-directory: tools/tvm_vta
+        run: |
+          N_TRIAL="${{ github.event.inputs.n_trial || '200' }}"
+          echo "Running autotune: n_trial=${N_TRIAL} seed=${SEED}"
+          bash run_autotune.sh \
+            --n-trial "${N_TRIAL}" \
+            --log-file tuned_log.json \
+            --hash-file tuned_schedule_hash.txt
+          echo "autotune_exit=0" >> "$GITHUB_OUTPUT"
+        continue-on-error: true  # dry-run always exits 0; real tuning may fail
+
+      - name: Report throughput
+        working-directory: tools/tvm_vta
+        run: |
+          echo "=== AutoTVM Throughput Report (S-51 G-51 Gate) ==="
+          if [ -f tuned_log.json ]; then
+            python3 - <<'PY_EOF'
+          import json, sys
+          try:
+              with open("tuned_log.json") as f:
+                  data = json.load(f)
+              tp = data.get("throughput", {})
+              meta = data.get("meta", {})
+              print(f"  ISA version     : {meta.get('isa_version','?')}")
+              print(f"  Baseline        : {tp.get('baseline_gflops', '?')} GFLOP/s")
+              print(f"  Tuned           : {tp.get('tuned_gflops', '?')} GFLOP/s")
+              print(f"  Speedup         : {tp.get('speedup', '?')}x")
+              print(f"  G-51 gate pass  : {tp.get('gate_G51_pass', '?')}")
+              print(f"  Note            : {meta.get('note','')}")
+          except Exception as e:
+              print(f"  [WARN] Could not parse tuned_log.json: {e}")
+          PY_EOF
+          else
+            echo "  [WARN] tuned_log.json not found."
+          fi
+          if [ -f tuned_schedule_hash.txt ]; then
+            echo ""
+            echo "=== ISA Stability Hash ==="
+            cat tuned_schedule_hash.txt
+          fi
+
+      - name: Upload tuning artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tvm-autotune-artifacts
+          path: |
+            tools/tvm_vta/tuned_log.json
+            tools/tvm_vta/tuned_schedule_hash.txt
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Job 2: isa-stability-check
+  # ---------------------------------------------------------------------------
+  isa-stability:
+    name: ISA Stability Check (ICA-V7-TVM-ISA-STABILITY)
+    runs-on: ubuntu-latest
+    needs: autotune
+    if: always()
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Download autotune artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: tvm-autotune-artifacts
+          path: tools/tvm_vta/
+        continue-on-error: true  # artifact may not exist on first run
+
+      - name: Run ISA stability check
+        working-directory: tools/tvm_vta
+        run: |
+          RELOAD_FLAG=""
+          if [ "${{ github.event.inputs.reload_cache }}" = "true" ]; then
+            RELOAD_FLAG="--reload-cache"
+            echo "[INFO] --reload-cache flag set by workflow input."
+          fi
+          python3 isa_stability_check.py \
+            --hash-file tuned_schedule_hash.txt \
+            --log-file  tuned_log.json \
+            ${RELOAD_FLAG} \
+            --verbose || {
+              echo "[WARN] ISA stability check failed — see corrective action ICA-V7-TVM-ISA-STABILITY."
+              echo "       Re-run workflow with reload_cache=true to acknowledge ISA version change."
+              exit 1
+            }
+        continue-on-error: false  # ISA stability is a hard gate
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "=== W15-TT-I TVM-VTA Workflow Summary ==="
+          echo "  ISA version    : ${ISA_VERSION}"
+          echo "  Anchor         : phi^2 + phi^-2 = 3"
+          echo "  Stream         : W15-TT-I / S-51"
+          echo "  Gate           : G-51 (>= 1.3x throughput vs baseline)"
+          echo "  ICA            : ICA-V7-TVM-ISA-STABILITY"
+          echo "  Honesty note   : AutoTVM throughput projection until silicon validated 2026-12-16"
