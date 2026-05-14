@@ -1,0 +1,26 @@
+# sim/tri1_v2/Makefile.q4_ternary — L-S35 Q4×Ternary dot8 simulation gate
+# Apache-2.0 · TRI-1 v2
+#
+# Tests L-S35: Hybrid Q4-weight × Ternary-activation 8-wide inner product.
+#
+#   make -f Makefile.q4_ternary          -> compile + run + check
+#   make -f Makefile.q4_ternary clean
+
+ROOT := ../..
+SRC  := \
+  $(ROOT)/src/q4_ternary_dot8.v \
+  tb_q4_ternary_dot8.v
+
+all: run
+
+tb_q4_ternary_dot8.vvp: $(SRC)
+	iverilog -g2012 -o $@ $(SRC)
+
+run: tb_q4_ternary_dot8.vvp
+	vvp $< | tee q4_ternary_dot8.log
+	@grep -q "Q4_TERNARY_DOT8_GREEN" q4_ternary_dot8.log || \
+	  (echo "Q4_TERNARY_DOT8 GATE FAILED" && exit 1)
+	@echo "Q4_TERNARY_DOT8 GATE PASSED"
+
+clean:
+	rm -f tb_q4_ternary_dot8.vvp tb_q4_ternary_dot8.vcd q4_ternary_dot8.log
