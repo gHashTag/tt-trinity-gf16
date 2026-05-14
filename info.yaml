@@ -78,6 +78,7 @@ project:
     - "ring27_memory.v"
     - "phi_pll_div.v"
     - "wishbone_full.v"
+    - "multi_die_reducer.v"  # L-S48 Wave-13b: 8-die inter-die merkle reducer (3-stage 8->4->2->1)
 
 pinout:
   ui[0]: "load_mode"
