@@ -78,6 +78,7 @@ project:
     - "ring27_memory.v"
     - "phi_pll_div.v"
     - "wishbone_full.v"
+    - "ledger_receipt_v2.v"
 
 pinout:
   ui[0]: "load_mode"

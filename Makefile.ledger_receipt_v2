@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: Apache-2.0
+# Makefile.ledger_receipt_v2 — Build & simulate ledger_receipt_v2 (L-S44)
+# Author: Dmitrii Vasilev <admin@t27.ai>
+#
+# Usage:
+#   make -f Makefile.ledger_receipt_v2          # build + run sim
+#   make -f Makefile.ledger_receipt_v2 clean    # remove build artifacts
+
+IVERILOG  ?= iverilog
+VVP       ?= vvp
+
+RTL_SRC   := src/ledger_receipt_v2.v
+TB_SRC    := sim/tri1_v2/tb_ledger_receipt_v2.v
+SIM_TOP   := tb_ledger_receipt_v2
+OUT_DIR   := /tmp/ledger_receipt_v2_sim
+SIM_BIN   := $(OUT_DIR)/$(SIM_TOP).vvp
+LOG_FILE  := /tmp/ledger.log
+
+.PHONY: all sim clean
+
+all: sim
+
+$(OUT_DIR):
+	mkdir -p $(OUT_DIR)
+
+$(SIM_BIN): $(RTL_SRC) $(TB_SRC) | $(OUT_DIR)
+	$(IVERILOG) -g2012 -Wall \
+		-o $(SIM_BIN) \
+		$(RTL_SRC) \
+		$(TB_SRC)
+
+sim: $(SIM_BIN)
+	$(VVP) $(SIM_BIN) | tee $(LOG_FILE)
+	@echo ""
+	@if grep -q "LEDGER_RECEIPT_V2_GREEN" $(LOG_FILE); then \
+		echo "=== SIM TOKEN: LEDGER_RECEIPT_V2_GREEN ==="; \
+	else \
+		echo "=== SIM FAILED: token not found ==="; \
+		exit 1; \
+	fi
+
+clean:
+	rm -rf $(OUT_DIR) $(LOG_FILE)
