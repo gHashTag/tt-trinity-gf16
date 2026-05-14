@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: Apache-2.0
+# Makefile.power_gate_fsm — Build & simulate L-S42 power_gate_fsm
+# Author: Dmitrii Vasilev <admin@t27.ai>
+# Project: TRI-1 Mid — Trinity GF16 SoC (tt-trinity-gf16)
+#
+# Usage:
+#   make -f Makefile.power_gate_fsm          # compile + simulate
+#   make -f Makefile.power_gate_fsm lint     # iverilog lint only
+#   make -f Makefile.power_gate_fsm clean    # remove build artifacts
+
+IVERILOG  ?= iverilog
+VVP       ?= vvp
+
+SRC_DIR   := src
+SIM_DIR   := sim/tri1_v2
+LOG       := /tmp/power_gate.log
+
+RTL       := $(SRC_DIR)/power_gate_fsm.v
+TB        := $(SIM_DIR)/tb_power_gate_fsm.v
+SIM_BIN   := /tmp/tb_power_gate_fsm.vvp
+
+.PHONY: all sim lint clean
+
+all: sim
+
+sim: $(SIM_BIN)
+	@echo "Running simulation..."
+	$(VVP) $(SIM_BIN) | tee $(LOG)
+	@echo ""
+	@echo "--- Token check ---"
+	@grep -c "POWER_GATE_FSM_GREEN" $(LOG) > /dev/null && \
+	    echo "TOKEN: POWER_GATE_FSM_GREEN" || \
+	    (echo "TOKEN: NOT FOUND — simulation failed" && exit 1)
+
+$(SIM_BIN): $(RTL) $(TB)
+	$(IVERILOG) -g2012 -Wall -Wno-timescale \
+	    -o $(SIM_BIN) \
+	    $(RTL) $(TB)
+
+lint: $(RTL) $(TB)
+	$(IVERILOG) -g2012 -Wall -Wno-timescale -tnull \
+	    $(RTL) $(TB)
+	@echo "Lint PASS"
+
+clean:
+	rm -f $(SIM_BIN) $(LOG)
