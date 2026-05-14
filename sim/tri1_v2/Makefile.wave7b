@@ -1,0 +1,26 @@
+# sim/tri1_v2/Makefile.wave7b — Wave-7b L-S25 + L-S30 simulation gate
+# Apache-2.0
+#
+# Tests L-S25 adaptive_strobe_fsm  and  L-S30 invariant_ring_watchdog.
+#
+#   make -f Makefile.wave7b            -> compile + run + check
+#   make -f Makefile.wave7b clean
+
+ROOT := ../..
+SRC  := \
+  $(ROOT)/src/adaptive_strobe_fsm.v \
+  $(ROOT)/src/invariant_ring_watchdog.v \
+  tb_wave7b_lanes.v
+
+all: run
+
+tb_wave7b_lanes.vvp: $(SRC)
+	iverilog -g2012 -o $@ $(SRC)
+
+run: tb_wave7b_lanes.vvp
+	vvp $< | tee wave7b_lanes.log
+	@grep -q "WAVE7B_LANES_GREEN" wave7b_lanes.log || (echo "WAVE7B GATE FAILED" && exit 1)
+	@echo "WAVE7B LANES GATE PASSED"
+
+clean:
+	rm -f tb_wave7b_lanes.vvp tb_wave7b_lanes.vcd wave7b_lanes.log
