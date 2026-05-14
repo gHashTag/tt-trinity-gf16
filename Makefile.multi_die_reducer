@@ -1,0 +1,38 @@
+# Makefile.multi_die_reducer — L-S48 Multi-Die Ledger Reducer sim gate (Wave-13b)
+# Apache-2.0  |  Author: Dmitrii Vasilev <admin@t27.ai>
+#
+# Targets:
+#   make -f Makefile.multi_die_reducer          → compile + run + check
+#   make -f Makefile.multi_die_reducer clean    → remove build artefacts
+#
+# Requires: iverilog, vvp, python3
+#
+# Topology: 3-stage 8→4→2→1 merkle, 2 pipeline regs, XOR+rotate (R=5,11,22)
+# Token:    MULTI_DIE_REDUCER_GREEN
+
+ROOT  := .
+SRC   := $(ROOT)/src/multi_die_reducer.v
+TB    := $(ROOT)/sim/tri1_v2/tb_multi_die_reducer.v
+VVP   := multi_die_reducer.vvp
+LOG   := /tmp/mdr.log
+
+all: run
+
+$(VVP): $(SRC) $(TB)
+	iverilog -g2012 -Wall \
+	    -o $(VVP) \
+	    $(SRC) $(TB)
+
+run: $(VVP)
+	vvp $(VVP) | tee $(LOG)
+	@grep -q "MULTI_DIE_REDUCER_GREEN" $(LOG) || \
+	    (echo "GATE FAILED — MULTI_DIE_REDUCER_GREEN not found" && exit 1)
+	@echo "========================================"
+	@echo "MULTI_DIE_REDUCER_GREEN  ✓  gate OK"
+	@echo "3-stage 8->4->2->1 merkle pipeline verified"
+	@echo "========================================"
+
+clean:
+	rm -f $(VVP) $(LOG)
+
+.PHONY: all run clean
