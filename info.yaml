@@ -78,6 +78,9 @@ project:
     - "ring27_memory.v"
     - "phi_pll_div.v"
     - "wishbone_full.v"
+    - "plrm_counter.v"
+    - "cassini_post.v"
+    - "bpb_lower_bound_guard.v"
 
 pinout:
   ui[0]: "load_mode"
