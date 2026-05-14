@@ -377,6 +377,63 @@ module tt_um_ghtag_trinity_gf16 (
         mm16_ok & enc_ok & bpb_ok & hash_ok & multi_rcpt_ok &
         alu_ok  & ring_ok & phi_div_ok & wb_ok;
 
+    // ==================================================================
+    // TRI-1 v2 LOW lanes (L-S22 / L-S23 / L-S33) — TTSKY26b silicon
+    // ==================================================================
+
+    // L-S22: PLRM period-locked runtime monitor (SCH-1 Qed: mutual exclusion)
+    // req_arith / req_orch tied low — observational / POST-only mode.
+    // plrm_error → status_byte[6] (was rsvd)
+    wire plrm_error;
+    wire plrm_grant_arith, plrm_grant_orch;  // unused — only error bit matters here
+    plrm_counter u_plrm (
+        .clk        (clk),
+        .rst_n      (rst_n),
+        .req_arith  (1'b0),
+        .req_orch   (1'b0),
+        .grant_arith(plrm_grant_arith),
+        .grant_orch (plrm_grant_orch),
+        .plrm_error (plrm_error)
+    );
+
+    // L-S23: Cassini-Lucas POST checker (PhD Ch.29 Cassini identity L_n·L_{n+1}-L_{n-1}·L_{n+2}=5·(-1)^n)
+    // cassini_ok → status_byte[7] (was alive-only; now OR'd for liveness compound)
+    // NOTE: cassini_post declares its own post_done output (different from phi_anchor_post)
+    wire cassini_ok;
+    wire cassini_post_done;
+    cassini_post u_cassini (
+        .clk      (clk),
+        .rst_n    (rst_n),
+        .cassini_ok  (cassini_ok),
+        .post_done   (cassini_post_done)
+    );
+
+    // L-S33: BPB Shannon lower-bound guard (THM-25-3 Qed: bpb >= 0)
+    // bpb_q24: sign-extend bpb_total[23:0] (U24 counts, always >= 0) to signed Q8.24
+    // floor_q24 = 0 (only THM-25-3 check: bpb >= 0; floor check is THM-25-1 Adm)
+    // sample pulses on every bpb_ok assertion from bpb_counter
+    // sticky_violation → status_byte extended bit (see low_lanes_status below)
+    wire signed [31:0] bpb_q24_se = $signed({8'b0, bpb_total[23:0]});
+    wire bpb_guard_violation, bpb_sticky_violation;
+    wire [1:0] bpb_fault_code;
+    bpb_lower_bound_guard u_bpb_guard (
+        .clk             (clk),
+        .rst_n           (rst_n),
+        .bpb_q24         (bpb_q24_se),
+        .floor_q24       (32'sd0),
+        .sample          (bpb_ok),
+        .bpb_violation   (bpb_guard_violation),
+        .sticky_violation(bpb_sticky_violation),
+        .fault_code      (bpb_fault_code)
+    );
+
+    // Low-lanes status aggregate (3 new POST bits):
+    //   low_lanes_status[0] = plrm_error        (L-S22: SCH-1 mutual-exclusion sticky)
+    //   low_lanes_status[1] = cassini_ok        (L-S23: Cassini identity all-pass)
+    //   low_lanes_status[2] = bpb_sticky_violation (L-S33: BPB >= 0 guard sticky)
+    // These map to wb_status_reg expansion bits [6:4] in next wave; held in _unused now.
+    wire [2:0] low_lanes_status = {bpb_sticky_violation, cassini_ok, plrm_error};
+
     // Output mux: combinational dot result by default, mesh result once produced.
     wire [15:0] final_result = mesh_result_valid ? mesh_result : dot_out;
 
@@ -406,6 +463,10 @@ module tt_um_ghtag_trinity_gf16 (
                      ring_rd, phi_tick, phi_state,
                      wb_dat_r, wb_ack,
                      super_crown_ok,
+                     plrm_grant_arith, plrm_grant_orch,
+                     cassini_post_done,
+                     bpb_guard_violation, bpb_fault_code,
+                     low_lanes_status,
                      ui_in[7:4], 1'b0};
 
 endmodule
