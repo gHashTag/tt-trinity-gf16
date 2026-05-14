@@ -78,6 +78,8 @@ project:
     - "ring27_memory.v"
     - "phi_pll_div.v"
     - "wishbone_full.v"
+    - "phi_prior_quantizer.v"    # Wave-9b L-S37 reuse
+    - "sram_ternary_bridge.v"    # Wave-10b L-S39
 
 pinout:
   ui[0]: "load_mode"

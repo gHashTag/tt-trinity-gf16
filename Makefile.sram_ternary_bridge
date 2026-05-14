@@ -1,0 +1,36 @@
+# Makefile.sram_ternary_bridge — L-S39 4 KiB SRAM Ternary Bridge simulation gate
+# SPDX-License-Identifier: Apache-2.0
+# Author: Dmitrii Vasilev <admin@t27.ai>
+#
+# Usage:
+#   make -f Makefile.sram_ternary_bridge          → compile + run + check
+#   make -f Makefile.sram_ternary_bridge clean    → remove generated files
+#
+# Requires: iverilog, vvp
+# Token: SRAM_TERN_BRIDGE_GREEN
+
+ROOT := .
+SIM  := $(ROOT)/sim/tri1_v2
+SRC  := \
+    $(ROOT)/src/phi_prior_quantizer.v \
+    $(ROOT)/src/sram_ternary_bridge.v \
+    $(SIM)/tb_sram_ternary_bridge.v
+
+VVP     := sim/tri1_v2/tb_sram_ternary_bridge.vvp
+LOGFILE := /tmp/sram_tern.log
+
+all: run
+
+$(VVP): $(SRC)
+	iverilog -g2012 -Wall -Wno-timescale -o $@ $(SRC)
+
+run: $(VVP)
+	vvp $(VVP) | tee $(LOGFILE)
+	@grep -q "SRAM_TERN_BRIDGE_GREEN" $(LOGFILE) || \
+	    (echo "GATE FAILED — token SRAM_TERN_BRIDGE_GREEN not found in $(LOGFILE)" && exit 1)
+	@echo ">>> SRAM TERNARY BRIDGE GATE PASSED <<<"
+
+clean:
+	rm -f $(VVP) sim/tri1_v2/tb_sram_ternary_bridge.vcd $(LOGFILE)
+
+.PHONY: all run clean
