@@ -78,6 +78,7 @@ project:
     - "ring27_memory.v"
     - "phi_pll_div.v"
     - "wishbone_full.v"
+    - "phi_prior_quantizer.v"  # L-S37 φ-prior on-chip weight quantizer (FP Q1.15 → ternary)
 
 pinout:
   ui[0]: "load_mode"

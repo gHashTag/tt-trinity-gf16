@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: Apache-2.0
+# Makefile.phi_prior_quantizer — L-S37 φ-prior weight quantizer simulation
+# Author: Dmitrii Vasilev <admin@t27.ai>
+# Usage: make -f Makefile.phi_prior_quantizer
+
+SIM_DIR   := sim/tri1_v2
+SRC_DIR   := src
+SIM_TOP   := tb_phi_prior_quantizer
+IVERILOG  := iverilog
+VVP       := vvp
+LOG       := phi_prior.log
+
+SRCS := \
+    $(SRC_DIR)/phi_prior_quantizer.v \
+    $(SIM_DIR)/tb_phi_prior_quantizer.v
+
+.PHONY: all sim clean
+
+all: sim
+
+sim: $(SIM_TOP).vvp
+	@echo "Running simulation..."
+	cd $(SIM_DIR) && $(VVP) ../../$(SIM_TOP).vvp | tee ../../$(LOG) ; true
+	@echo ""
+	@grep -q PHI_PRIOR_QUANT_GREEN $(LOG) && \
+	    echo ">>> PHI_PRIOR_QUANT_GREEN <<<" || \
+	    (echo ">>> SIMULATION FAILED <<<" && exit 1)
+
+$(SIM_TOP).vvp: $(SRCS)
+	$(IVERILOG) -g2012 -Wall \
+	    -I$(SRC_DIR) \
+	    -o $@ \
+	    $(SRCS)
+
+lint:
+	iverilog -g2012 -Wall -t null \
+	    -I$(SRC_DIR) \
+	    $(SRCS)
+
+clean:
+	rm -f $(SIM_TOP).vvp $(LOG)
