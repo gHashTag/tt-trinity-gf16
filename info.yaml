@@ -78,6 +78,7 @@ project:
     - "ring27_memory.v"
     - "phi_pll_div.v"
     - "wishbone_full.v"
+    - "multi_prec_lucas.v"
 
 pinout:
   ui[0]: "load_mode"

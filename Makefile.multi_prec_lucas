@@ -1,0 +1,43 @@
+# Makefile.multi_prec_lucas — L-S36 Multi-precision Lucas Pipeline
+# Apache-2.0  |  Trinity GF16 Project
+#
+# Usage:
+#   make -f Makefile.multi_prec_lucas        # compile + simulate
+#   make -f Makefile.multi_prec_lucas clean  # remove build artifacts
+
+SIM_LOG   ?= /tmp/multi_prec_lucas.log
+VVP_BIN   := /tmp/multi_prec_lucas.vvp
+SRC_DIR   := src
+SIM_DIR   := sim/tri1_v2
+
+# Source files
+RTL_SRC   := $(SRC_DIR)/multi_prec_lucas.v
+TB_SRC    := $(SIM_DIR)/tb_multi_prec_lucas.v
+
+# iverilog flags: suppress WIDTHTRUNC and WIDTHEXPAND (width-extending cast)
+IVFLAGS   := -g2012 -Wall -Wno-WIDTHTRUNC -Wno-WIDTHEXPAND
+
+.PHONY: all sim clean verify
+
+all: sim verify
+
+$(VVP_BIN): $(RTL_SRC) $(TB_SRC)
+	@echo "[iverilog] Compiling multi_prec_lucas..."
+	iverilog $(IVFLAGS) -o $(VVP_BIN) $(TB_SRC) $(RTL_SRC)
+
+sim: $(VVP_BIN)
+	@echo "[vvp] Running simulation..."
+	vvp $(VVP_BIN) | tee $(SIM_LOG)
+
+verify: sim
+	@echo "[verify] Checking for MULTI_PREC_LUCAS_GREEN token..."
+	@if grep -q "MULTI_PREC_LUCAS_GREEN" $(SIM_LOG); then \
+		echo "[OK] MULTI_PREC_LUCAS_GREEN token found — L-S36 PASS"; \
+	else \
+		echo "[FAIL] MULTI_PREC_LUCAS_GREEN token NOT found — L-S36 FAIL"; \
+		exit 1; \
+	fi
+
+clean:
+	@rm -f $(VVP_BIN) $(SIM_LOG)
+	@echo "[clean] Removed build artifacts"
