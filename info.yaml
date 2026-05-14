@@ -78,6 +78,7 @@ project:
     - "ring27_memory.v"
     - "phi_pll_div.v"
     - "wishbone_full.v"
+    - "d2d_serdes_stub.v"
 
 pinout:
   ui[0]: "load_mode"

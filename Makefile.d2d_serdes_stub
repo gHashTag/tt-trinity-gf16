@@ -1,0 +1,43 @@
+# Makefile.d2d_serdes_stub — L-S47 D2D SerDes Stub simulation gate
+# SPDX-License-Identifier: Apache-2.0
+#
+# Tests L-S47: synthesizable die-to-die SerDes stub RTL
+#   8b/10b-lite encoder + handshake-paced lane (digital only)
+#
+# Usage:
+#   make -f Makefile.d2d_serdes_stub          -> compile + run + check
+#   make -f Makefile.d2d_serdes_stub clean     -> remove build artifacts
+#
+# Author: Dmitrii Vasilev <admin@t27.ai>
+# DOI: 10.5281/zenodo.19227877
+
+ROOT := .
+SIM_DIR := $(ROOT)/sim/tri1_v2
+SRC_DIR := $(ROOT)/src
+
+SRC := \
+  $(SRC_DIR)/d2d_serdes_stub.v \
+  $(SIM_DIR)/tb_d2d_serdes_stub.v
+
+VVP  := sim_d2d_serdes_stub.vvp
+LOG  := /tmp/d2d.log
+TOKEN := D2D_SERDES_STUB_GREEN
+
+.PHONY: all run clean
+
+all: run
+
+$(VVP): $(SRC)
+	iverilog -g2012 -Wall -Wno-timescale -o $(VVP) $(SRC)
+
+run: $(VVP)
+	vvp $(VVP) | tee $(LOG)
+	@grep -q "$(TOKEN)" $(LOG) || (echo "GATE FAILED — token $(TOKEN) not found" && exit 1)
+	@echo ""
+	@echo "======================================"
+	@echo "  D2D SerDes Stub: GATE PASSED"
+	@echo "  Token: $(TOKEN)"
+	@echo "======================================"
+
+clean:
+	rm -f $(VVP) $(LOG)
