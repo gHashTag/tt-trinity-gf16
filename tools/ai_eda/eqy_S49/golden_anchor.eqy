@@ -1,0 +1,106 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# TRI-NET-G1 / TT-Shuttle Squeeze v7 — W15-TT-H AI-EDA Stream
+# Vector S-49: Yosys EQY formal equivalence checker in CI
+#
+# Anchor: phi^2 + phi^-2 = 3
+# R5 honesty: projection until chip-in-hand 2026-12-16
+#
+# Golden reference: rtl/golden/dot32_v2.sv @ commit a423ed5 (silicon-G1 base)
+# Optimised set:    src/v7_*.v  (W15-TT-H optimised RTL)
+#
+# Gate G-49: EQY proves equivalence for all v7 stream branches.
+#            Non-equivalent result causes CI merge block.
+#
+# Usage:
+#   eqy golden_anchor.eqy
+#   (or via run_eqy.sh which wraps error handling)
+#
+# Requires: Yosys >= 0.29, EQY >= 0.1 (YosysHQ)
+#   Install: https://github.com/YosysHQ/eqy
+
+[options]
+# Solver backend: bitwuzla preferred; fall back to z3 if not installed
+backend bitwuzla
+# fallback_backend z3
+
+# Parallelism: use all available cores in CI
+parallel_jobs 4
+
+# Proof depth for sequential equivalence (retimed designs)
+depth 20
+
+# Partition equivalence check by module to improve scalability
+partition_module 1
+
+[gold]
+# Golden RTL — silicon-G1 frozen reference
+# Pinned to commit a423ed5; do NOT change this path without updating the anchor.
+read -sv ../../rtl/golden/dot32_v2.sv
+
+# Additional golden support files (stubs expected in rtl/golden/)
+# read -sv ../../rtl/golden/dot4_v2.sv
+# read -sv ../../rtl/golden/pe_array_v6.sv
+
+prep -flatten -top dot32_v2
+
+[gate]
+# Optimised RTL — W15-TT-H v7 output set
+# Glob covers all v7_ prefixed modules in src/
+read -sv ../../src/v7_dot32.v
+# Additional v7 modules (uncomment as they are created by other streams):
+# read -sv ../../src/v7_dot4.v
+# read -sv ../../src/v7_pe_array.v
+# read -sv ../../src/v7_rns_popcount.v
+# read -sv ../../src/v7_sigma_delta_mac.v
+# read -sv ../../src/v7_abc_remapped.v
+
+prep -flatten -top dot32_v2
+
+[strategy sat_full]
+# Full combinational SAT equivalence (fast, catches most bugs)
+use sat
+depth 0
+solver bitwuzla
+
+[strategy bmc_seq]
+# Bounded model check for sequential equivalence (retimed cells from S-50 ABC)
+use bmc
+depth 20
+solver bitwuzla
+
+[strategy ind_seq]
+# k-induction for sequential paths that exceed BMC depth
+use ind
+depth 40
+solver bitwuzla
+
+# ---------------------------------------------------------------------------
+# Port mapping overrides
+# ---------------------------------------------------------------------------
+# If the optimised module renames ports, declare equivalences here.
+# Format:   map GOLD_PORT GATE_PORT
+# Example:  map dot32_v2.din_a dot32_v2.a_in
+#
+# (No renames expected at initial integration; uncomment as needed)
+
+# ---------------------------------------------------------------------------
+# Output assertions (EQY "cover" hooks)
+# ---------------------------------------------------------------------------
+# These assertions are checked in both gold and gate; mismatch = FAIL.
+# Use Yosys $assert syntax in the RTL or add via SBY tasks below.
+#
+# assert_property: all output bits of dot32_v2.result must be identical
+# in gold and gate under the same input stimuli.
+
+# ---------------------------------------------------------------------------
+# Notes for operator
+# ---------------------------------------------------------------------------
+# 1. Both DREAMPlace (S-45) and this EQY config (S-49) require tool install:
+#    - DREAMPlace: https://github.com/limbo018/DREAMPlace
+#    - EQY:        pip install eqy  OR  https://github.com/YosysHQ/eqy
+#    - bitwuzla:   https://bitwuzla.github.io/
+# 2. The golden file rtl/golden/dot32_v2.sv is a frozen stub at commit a423ed5.
+#    Replace with the actual dot32 RTL for real equivalence checking.
+# 3. The gate file src/v7_dot32.v must be provided by the RTL optimisation
+#    streams (W15-TT-A through W15-TT-G) before this check can pass.

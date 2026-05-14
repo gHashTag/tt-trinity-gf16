@@ -1,0 +1,89 @@
+{
+  "_comment": "DREAMPlace config — TRI-NET-G1 / W15-TT-H S-45 — Anchor: phi^2+phi^-2=3",
+  "_license": "Apache-2.0",
+  "_r5_honesty": "projection until chip-in-hand 2026-12-16",
+  "_version": "v7.0.0-W15-TT-H",
+
+  "random_seed": 42,
+
+  "action_space": {
+    "pe_swap": {
+      "enabled": true,
+      "description": "Swap two Processing-Element columns to reduce inter-PE wire length",
+      "max_distance_cols": 4
+    },
+    "io_permute": {
+      "enabled": true,
+      "description": "Rotate IO pad assignment ring to minimise pad-to-core wire length",
+      "ring_steps": 8
+    },
+    "pll_rotate": {
+      "enabled": true,
+      "description": "Rotate PLL placement quadrant (NW/NE/SW/SE) for timing recovery",
+      "quadrants": ["NW", "NE", "SW", "SE"]
+    }
+  },
+
+  "optimizer": {
+    "type": "nesterov",
+    "learning_rate": 0.01,
+    "momentum": 0.9,
+    "iterations": 2000,
+    "early_stop_overflow": 0.01
+  },
+
+  "placement": {
+    "target_density": 0.80,
+    "target_utilization": 0.80,
+    "density_weight": 8e-5,
+    "wirelength_weight": 1.0,
+    "routability_opt_flag": 1,
+    "routability_max_adjust_area_ratio": 1.2
+  },
+
+  "global_placement": {
+    "Kq": 1.05,
+    "stopIterPercent": 0.01,
+    "maxIter": 2000
+  },
+
+  "detailed_placement": {
+    "algorithm": "abacus",
+    "max_displacement": [2, 2]
+  },
+
+  "timing": {
+    "timing_opt_flag": 1,
+    "net_weighting_scheme": 4,
+    "cppr_along_clock_path_flag": 1
+  },
+
+  "technology": {
+    "lef_input": ["${PDKPATH}/sky130A/libs.ref/sky130_fd_sc_hd/lef/sky130_fd_sc_hd.lef"],
+    "lib_input": ["${SKY130_HDLL_LIB}", "${SKY130_HD_LIB}"],
+    "unit_micro_in_lef": 1000
+  },
+
+  "io": {
+    "def_input": "input.def",
+    "def_output": "optimized.def",
+    "result_dir": "results/"
+  },
+
+  "cpu": {
+    "num_threads": 4
+  },
+
+  "gpu": {
+    "gpu": 0,
+    "_comment": "Set to 1 if CUDA available; CI uses CPU fallback (gpu=0)"
+  },
+
+  "rl_refinement": {
+    "enabled": true,
+    "episodes": 1,
+    "steps_per_episode": 10,
+    "reward_wns_weight": 2.0,
+    "reward_hpwl_weight": 1.0
+  }
+}
