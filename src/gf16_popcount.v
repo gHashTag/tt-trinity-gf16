@@ -55,8 +55,8 @@ module gf16_popcount #(
         end
     endgenerate
 
-    reg [7:0] s1_same, s1_diff;
-    reg       s1_valid;
+    (* keep = "true" *) (* no_retiming = "true" *) reg [7:0] s1_same, s1_diff;
+    (* keep = "true" *) (* no_retiming = "true" *) reg       s1_valid;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -92,8 +92,8 @@ module gf16_popcount #(
     wire [3:0] cnt_neg_comb = ({2'b00, pn_comb[0]} + {2'b00, pn_comb[1]}) +
                                ({2'b00, pn_comb[2]} + {2'b00, pn_comb[3]});
 
-    reg [3:0] s2_cnt_pos, s2_cnt_neg;
-    reg       s2_valid;
+    (* keep = "true" *) (* no_retiming = "true" *) reg [3:0] s2_cnt_pos, s2_cnt_neg;
+    (* keep = "true" *) (* no_retiming = "true" *) reg       s2_valid;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin

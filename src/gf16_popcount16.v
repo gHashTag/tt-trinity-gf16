@@ -47,8 +47,8 @@ module gf16_popcount16 #(
         end
     endgenerate
 
-    reg [15:0] s1_same, s1_diff;
-    reg        s1_valid;
+    (* keep = "true" *) (* no_retiming = "true" *) reg [15:0] s1_same, s1_diff;
+    (* keep = "true" *) (* no_retiming = "true" *) reg        s1_valid;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -93,8 +93,8 @@ module gf16_popcount16 #(
         ({3'b000, sn0} + {3'b000, sn1}) + ({3'b000, sn2} + {3'b000, sn3}) +
         ({3'b000, sn4} + {3'b000, sn5}) + ({3'b000, sn6} + {3'b000, sn7});
 
-    reg [4:0] s2_cnt_pos, s2_cnt_neg;
-    reg       s2_valid;
+    (* keep = "true" *) (* no_retiming = "true" *) reg [4:0] s2_cnt_pos, s2_cnt_neg;
+    (* keep = "true" *) (* no_retiming = "true" *) reg       s2_valid;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
