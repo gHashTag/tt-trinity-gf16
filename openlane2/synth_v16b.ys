@@ -1,0 +1,59 @@
+# Wave-16b Yosys synthesis script for tt_um_trinity_max_v16b
+# Anchor: phi^2+phi^-2=3  DOI 10.5281/zenodo.19227877
+# Apache-2.0
+# Author: Vasilev Dmitrii <admin@t27.ai>
+
+# -----------------------------------------------------------------------
+# Read all RTL source files
+# -----------------------------------------------------------------------
+read_verilog -sv ../src/tri_zero_skip_gate.sv
+read_verilog -I../src \
+    ../src/gf16_add.v \
+    ../src/gf16_mul.v \
+    ../src/gf16_dot4.v \
+    ../src/gf16_poly_mul.v \
+    ../src/gf16_dot4_poly.v \
+    ../src/gf16_dot4_sparse.v \
+    ../src/trinity_gf16_tile.v \
+    ../src/trinity_gf16_tile_poly.v \
+    ../src/lucas_rom.v \
+    ../src/hwrng_lfsr.v \
+    ../src/phi_anchor_post.v \
+    ../src/wb_status_reg.v \
+    ../src/trinity_master_fsm.v \
+    ../src/trinity_router_2x2.v \
+    ../src/trinity_router_4x4.v \
+    ../src/trinity_mesh_4x4.v \
+    ../src/trinity_mesh_4x4_poly.v \
+    ../src/trinity_mesh_4x4_zskip.v \
+    ../src/tt_um_trinity_max_v16b.v
+
+# -----------------------------------------------------------------------
+# Elaborate
+# -----------------------------------------------------------------------
+hierarchy -top tt_um_trinity_max_v16b
+
+# -----------------------------------------------------------------------
+# Synthesis
+# -----------------------------------------------------------------------
+synth -top tt_um_trinity_max_v16b -flatten
+
+# -----------------------------------------------------------------------
+# Technology mapping to SKY130 HD stdcells
+# -----------------------------------------------------------------------
+dfflibmap -liberty /home/user/.volare/volare/sky130/versions/c6d73a35f524070e85faff4a6a9eef49553ebc2b/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
+
+abc -liberty /home/user/.volare/volare/sky130/versions/c6d73a35f524070e85faff4a6a9eef49553ebc2b/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib \
+    -constr /home/user/workspace/wave16b_pnr_clone/openlane2/abc_constr_2500ps.constr
+
+# -----------------------------------------------------------------------
+# Clean up and statistics
+# -----------------------------------------------------------------------
+clean
+stat -liberty /home/user/.volare/volare/sky130/versions/c6d73a35f524070e85faff4a6a9eef49553ebc2b/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
+
+# -----------------------------------------------------------------------
+# Write outputs
+# -----------------------------------------------------------------------
+write_verilog -noattr /home/user/workspace/wave16b_pnr_clone/openlane2/tt_um_trinity_max_v16b.netlist.v
+write_json /home/user/workspace/wave16b_pnr_clone/openlane2/tt_um_trinity_max_v16b.netlist.json

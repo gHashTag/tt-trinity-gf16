@@ -1,0 +1,87 @@
+{
+  "__comment__": [
+    "Wave-16b OpenLane2 P&R configuration.",
+    "DESIGN: tt_um_trinity_max_v16b — poly+zskip merged mesh (SKY130A).",
+    "Apache-2.0 — Author: Vasilev Dmitrii <admin@t27.ai> ORCID 0009-0008-4294-6159",
+    "Anchor: phi^2+phi^-2=3  DOI 10.5281/zenodo.19227877",
+    "",
+    "DO NOT touch info.yaml (Octad submission frozen).",
+    "DO NOT open PR from this config to main or any Octad branch."
+  ],
+
+  "DESIGN_NAME": "tt_um_trinity_max_v16b",
+  "VERILOG_FILES": [
+    "src/trinity_packet.vh",
+    "src/gf16_mul.v",
+    "src/gf16_add.v",
+    "src/gf16_dot4.v",
+    "src/gf16_poly_mul.v",
+    "src/gf16_dot4_poly.v",
+    "src/trinity_gf16_tile.v",
+    "src/trinity_gf16_tile_poly.v",
+    "src/trinity_router_2x2.v",
+    "src/trinity_router_4x4.v",
+    "src/trinity_mesh_4x4.v",
+    "src/trinity_mesh_4x4_poly.v",
+    "src/tri_zero_skip_gate.sv",
+    "src/trinity_mesh_4x4_zskip.v",
+    "src/trinity_master_fsm.v",
+    "src/phi_anchor_post.v",
+    "src/lucas_rom.v",
+    "src/hwrng_lfsr.v",
+    "src/wb_status_reg.v",
+    "src/tt_um_trinity_max_v16b.v"
+  ],
+
+  "PDK": "sky130A",
+  "STD_CELL_LIBRARY": "sky130_fd_sc_hd",
+
+  "CLOCK_PORT": "clk",
+  "CLOCK_PERIOD": 2.5,
+
+  "STA_CORNERS": [
+    "sky130_fd_sc_hd__tt_025C_1v80",
+    "sky130_fd_sc_hd__ff_n40C_1v95",
+    "sky130_fd_sc_hd__ss_100C_1v60"
+  ],
+  "STA_PRIMARY_CORNER": "sky130_fd_sc_hd__tt_025C_1v80",
+
+  "STA_CORNER_FAST": "sky130_fd_sc_hd__ff_n40C_1v95",
+  "STA_CORNER_SLOW": "sky130_fd_sc_hd__ss_100C_1v60",
+
+  "SYNTH_STRATEGY": "AREA 0",
+  "SYNTH_BUFFERING": 1,
+  "SYNTH_SIZING": 1,
+
+  "PL_TARGET_DENSITY_PCT": 45,
+  "FP_CORE_UTIL": 45,
+  "FP_ASPECT_RATIO": 1,
+
+  "DIODE_INSERTION_STRATEGY": 3,
+  "CTS_TARGET_SKEW": 200,
+
+  "RSZ_TARGET_SLACK_MARGIN": 0.1,
+
+  "GRT_OVERFLOW_ITERS": 100,
+  "GRT_ALLOW_CONGESTION": false,
+
+  "RUN_CVC": false,
+  "MAGIC_DRC_USE_GDS": false,
+
+  "ROUTING_CORES": 4,
+
+  "DIE_AREA": "0 0 300 300",
+  "CORE_AREA": "10 10 290 290",
+
+  "MAX_FANOUT_CONSTRAINT": 10,
+
+  "meta": {
+    "wave": "16b",
+    "claim": "120 TOPS/W projected from Wave-16a poly+zskip",
+    "verification_target": "measure ACTUAL cells/area/timing/power via SKY130 P&R",
+    "r5_note": "HONEST reporting — DO NOT fabricate P&R numbers",
+    "anchor": "phi^2+phi^-2=3",
+    "doi": "10.5281/zenodo.19227877",
+    "spdx": "Apache-2.0"
+  }
+}

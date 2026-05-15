@@ -1,0 +1,13 @@
+
+4. Executing STA pass (static timing analysis).
+
+Syntax error in command `sta -liberty /home/user/.volare/volare/sky130/versions/c6d73a35f524070e85faff4a6a9eef49553ebc2b/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib':
+
+    sta [options] [selection]
+
+This command performs static timing analysis on the design. (Only considers
+paths within a single module, so the design must be flattened.)
+
+ERROR: Command syntax error: Unknown option or option in arguments.
+> sta -liberty /home/user/.volare/volare/sky130/versions/c6d73a35f524070e85faff4a6a9eef49553ebc2b/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
+>     ^
