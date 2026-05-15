@@ -60,9 +60,10 @@ jobs:
 
       - name: Install Yosys (pinned apt package)
         run: |
-          # Install Yosys from apt — Ubuntu 22.04 ships a recent enough version
+          # Install Yosys from apt — Ubuntu 22.04 ships Yosys 0.9 (uses -V not --version)
           sudo apt-get install -y --no-install-recommends yosys
-          yosys --version
+          # Yosys 0.9 uses -V flag; newer versions support --version
+          yosys -V 2>/dev/null || yosys --version 2>/dev/null || echo "yosys installed (version flag varies)"
 
       - name: Install Yosys EQY
         run: |
@@ -78,7 +79,7 @@ jobs:
       - name: Show toolchain versions
         run: |
           echo "=== Yosys version ==="
-          yosys --version || echo "yosys not found"
+          yosys -V 2>/dev/null || yosys --version 2>/dev/null || echo "yosys not found"
           echo "=== EQY version ==="
           eqy --version 2>/dev/null || echo "eqy not found (will mark PENDING)"
           echo "=== Python version ==="
