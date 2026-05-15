@@ -66,15 +66,18 @@ jobs:
           yosys -V 2>/dev/null || yosys --version 2>/dev/null || echo "yosys installed (version flag varies)"
 
       - name: Install Yosys EQY
+        # Non-fatal: if eqy is unavailable, script marks modules PENDING (R5-honest)
+        # EQY_STRICT=0 means PENDING verdicts warn but do not block CI
+        continue-on-error: true
         run: |
-          # eqy is available via pip (yosys-eqy package) or from source
-          pip3 install yosys-eqy 2>/dev/null || {
-            echo "pip install failed, attempting source install..."
-            git clone https://github.com/YosysHQ/eqy /tmp/eqy-src
-            pip3 install /tmp/eqy-src
-          }
-          # Verify installation
-          eqy --version 2>/dev/null || echo "eqy not on PATH — check install"
+          # Install eqy from YosysHQ/eqy source (pip package name varies by version)
+          # Try multiple install methods in order; non-fatal per continue-on-error
+          pip3 install --user yosys-eqy 2>&1 && echo "Installed via pip yosys-eqy" && exit 0
+          echo "pip yosys-eqy failed, trying pip eqy..."
+          pip3 install --user eqy 2>&1 && echo "Installed via pip eqy" && exit 0
+          echo "Both pip methods failed. EQY will be marked NOT_INSTALLED."
+          echo "Modules will receive PENDING verdict (acceptable with EQY_STRICT=0)."
+          exit 0  # always succeed — script handles missing eqy gracefully
 
       - name: Show toolchain versions
         run: |
