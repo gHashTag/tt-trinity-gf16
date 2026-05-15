@@ -1,6 +1,6 @@
 # Tiny Tapeout project information
 project:
-  title:        "TRI-1 Mid — Trinity GF16 16-cell SUPER-CROWN SoC"
+  title:        "TRI-1 MAX — Trinity GF16 16-tile 4×4 mesh SoC"
   author:       "Dmitrii Vasilev · Trinity Stack"
   discord:      "t27_dev"
   description:  |
@@ -46,11 +46,14 @@ project:
   language:     "Verilog"
   clock_hz:     50000000
 
-  tiles: "8x2"  # bumped 2x2 -> 8x2 in PR #8 (Wave-26b SUPER-CROWN) to accommodate full Trinity SoC mini: 4 GF16 tiles + mesh + master FSM + 6 CROWN POST modules + 16x16 ternary matmul + BitNet encoder + BPB counter + BLAKE3 anchor + multi-tile RECEIPT + ALU-9 decoder + RING27 memory + phi-PLL + Wishbone-lite full. Target ~16000 gates @ 60% density on SKY130.
+  tiles: "4x4"  # bumped 8x2 -> 4x4 in fix/max-info-yaml-wireup (RVR-022-D W15-TT-E) to match MAX 16-tile 4x4 mesh footprint.
 
-  top_module:  "tt_um_ghtag_trinity_gf16"
+  top_module:  "tt_um_trinity_max"
 
   source_files:
+    - "tt_um_trinity_max.v"
+    - "trinity_mesh_4x4.v"
+    - "trinity_router_4x4.v"
     - "tt_um_ghtag_trinity_gf16.v"
     - "gf16_mul.v"
     - "gf16_add.v"
