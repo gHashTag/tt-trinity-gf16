@@ -91,13 +91,19 @@ module tb_trinity_mesh_4x4;
     reg tg_max_05_pass;
     reg tg_max_06_pass;
 
-    // Canonical 0x47C0 test values (same as baseline testbench)
-    // These are the fixed canned operands used in the Mid top dot4 legacy path.
-    // For the MAX tile we check that tile 0 produces a valid result for
-    // standard LOAD_A/LOAD_B/COMPUTE/READ_RES sequence.
+    // Canonical 0x47C0 test values (ICA-M-002 fix, 2026-05-15)
+    // Use the same 4-operand set as tt_um_trinity_max's hardwired dot path:
+    //   lane0=0x3E00(1.0), lane1=0x4000(2.0), lane2=0x4100(3.0), lane3=0x4200(4.0)
+    // dot4(1,2,3,4, 1,2,3,4) = 1+4+9+16 = 30.0 = 0x47C0
+    // This provides forward-compatibility with the Mid top reference value.
+    localparam [15:0] CANON_A0 = 16'h3E00;  // 1.0
+    localparam [15:0] CANON_A1 = 16'h4000;  // 2.0
+    localparam [15:0] CANON_A2 = 16'h4100;  // 3.0
+    localparam [15:0] CANON_A3 = 16'h4200;  // 4.0
+    // (retained for backward compat in LFSR loop)
     localparam [15:0] CANON_A = 16'h3E00;
     localparam [15:0] CANON_B = 16'h3E00;
-    // Expected: gf16_dot4 of canned operands = 0x47C0 per baseline spec.
+    // Expected: dot4(1,2,3,4, 1,2,3,4) = 30.0 = 0x47C0
     localparam [15:0] CANON_EXPECTED = 16'h47C0;
 
     // Node IDs: (0,0)=0, (3,3)=15 (dst={y=3,x=3}=4'b1111=4'd15)
@@ -128,6 +134,10 @@ module tb_trinity_mesh_4x4;
     endtask
 
     // ---- Wait for response with timeout ----
+    // ICA-M-003 FIX (2026-05-15): keep host_out_ready asserted while waiting
+    // and deassert ONLY after the captured cycle, not before. This prevents the
+    // RECEIPT packet from being stranded in the router's single output buffer
+    // when host_out_ready goes low between RESULT and RECEIPT captures.
     task wait_response;
         output [31:0] rpkt;
         input  integer timeout_cycles;
@@ -142,11 +152,44 @@ module tb_trinity_mesh_4x4;
             end
             if (host_out_valid) begin
                 rpkt = host_out_pkt;
+                // Do NOT deassert ready here — let the next call or explicit
+                // deassertion manage it. This keeps the router buffer draining.
                 @(posedge clk);
             end else begin
                 rpkt = 32'hDEAD_DEAD; // timeout sentinel
+                host_out_ready <= 1'b0;
+            end
+            // Ready is left high if a packet was received, so the RECEIPT
+            // immediately following RESULT is not dropped.
+        end
+    endtask
+
+    // Flush the output buffer: drain up to N packets with a short timeout per packet,
+    // then deassert ready.  Prevents stale RECEIPT packets from leaking into the next
+    // test section (ICA-M-003 testbench fix).
+    task flush_and_lower;
+        integer d, ff;
+        reg [31:0] tmp;
+        begin
+            host_out_ready <= 1'b1;
+            // Drain up to 4 buffered packets (generous timeout each)
+            for (ff = 0; ff < 4; ff = ff + 1) begin
+                d = 0;
+                while (!host_out_valid && d < 8) begin @(posedge clk); d = d+1; end
+                if (host_out_valid) begin
+                    tmp = host_out_pkt; // consume silently
+                    @(posedge clk);
+                end
             end
             host_out_ready <= 1'b0;
+            @(posedge clk);
+        end
+    endtask
+
+    // Explicit deassert after a response pair (RESULT + RECEIPT) is consumed.
+    task lower_ready;
+        begin
+            flush_and_lower;
         end
     endtask
 
@@ -187,16 +230,17 @@ module tb_trinity_mesh_4x4;
         lfsr_reg    = LFSR_SEED;
 
         // First run the canonical canned vector (0x47C0 check) on tile 0.
-        // LOAD_A lane 0..3 with CANON_A; LOAD_B lane 0..3 with CANON_B; COMPUTE; READ_RES.
+        // ICA-M-002 FIX: use per-lane operands (1,2,3,4) matching tt_um_trinity_max.
+        // dot4(1,2,3,4, 1,2,3,4) = 1+4+9+16 = 30.0 = 0x47C0
         send_pkt(mk_pkt_4x4(OP_LOAD_JOB,  NODE_00, 4'd0, 4'h0, 16'h0001));
-        send_pkt(mk_pkt_4x4(OP_LOAD_A,    NODE_00, 4'd0, 4'h0, CANON_A));
-        send_pkt(mk_pkt_4x4(OP_LOAD_A,    NODE_00, 4'd0, 4'h1, CANON_A));
-        send_pkt(mk_pkt_4x4(OP_LOAD_A,    NODE_00, 4'd0, 4'h2, CANON_A));
-        send_pkt(mk_pkt_4x4(OP_LOAD_A,    NODE_00, 4'd0, 4'h3, CANON_A));
-        send_pkt(mk_pkt_4x4(OP_LOAD_B,    NODE_00, 4'd0, 4'h0, CANON_B));
-        send_pkt(mk_pkt_4x4(OP_LOAD_B,    NODE_00, 4'd0, 4'h1, CANON_B));
-        send_pkt(mk_pkt_4x4(OP_LOAD_B,    NODE_00, 4'd0, 4'h2, CANON_B));
-        send_pkt(mk_pkt_4x4(OP_LOAD_B,    NODE_00, 4'd0, 4'h3, CANON_B));
+        send_pkt(mk_pkt_4x4(OP_LOAD_A,    NODE_00, 4'd0, 4'h0, CANON_A0)); // lane0=1.0
+        send_pkt(mk_pkt_4x4(OP_LOAD_A,    NODE_00, 4'd0, 4'h1, CANON_A1)); // lane1=2.0
+        send_pkt(mk_pkt_4x4(OP_LOAD_A,    NODE_00, 4'd0, 4'h2, CANON_A2)); // lane2=3.0
+        send_pkt(mk_pkt_4x4(OP_LOAD_A,    NODE_00, 4'd0, 4'h3, CANON_A3)); // lane3=4.0
+        send_pkt(mk_pkt_4x4(OP_LOAD_B,    NODE_00, 4'd0, 4'h0, CANON_A0)); // lane0=1.0
+        send_pkt(mk_pkt_4x4(OP_LOAD_B,    NODE_00, 4'd0, 4'h1, CANON_A1)); // lane1=2.0
+        send_pkt(mk_pkt_4x4(OP_LOAD_B,    NODE_00, 4'd0, 4'h2, CANON_A2)); // lane2=3.0
+        send_pkt(mk_pkt_4x4(OP_LOAD_B,    NODE_00, 4'd0, 4'h3, CANON_A3)); // lane3=4.0
         send_pkt(mk_pkt_4x4(OP_COMPUTE,   NODE_00, 4'd0, 4'h0, 16'h0));
         send_pkt(mk_pkt_4x4(OP_READ_RES,  NODE_00, 4'd0, 4'h0, 16'h0));
 
@@ -250,42 +294,71 @@ module tb_trinity_mesh_4x4;
         end
 
         tg_max_05_pass = (fail_count == 0);
+        lower_ready;  // deassert between TG-Max-05 and TG-Max-06
         $display("[TG-Max-05] %0d/%0d LFSR vectors received valid RESULT — %s",
                  pass_count, N_VECTORS + 1,
                  tg_max_05_pass ? "PASS" : "FAIL");
 
         // ----------------------------------------------------------------
         // TG-Max-06: TRN_OP_RECEIPT packet flow end-to-end (sim-asserted)
-        // After READ_RES the tile emits RESULT then RECEIPT.
-        // Re-issue READ_RES and capture both packets.
+        // ICA-M-003 FIX: hold host_out_ready=1 throughout this section so
+        // both RESULT and RECEIPT are captured without timing gaps.
         receipt_count = 0;
 
         send_pkt(mk_pkt_4x4(OP_LOAD_JOB, NODE_00, 4'd0, 4'h0, 16'h00AB));
-        send_pkt(mk_pkt_4x4(OP_LOAD_A,   NODE_00, 4'd0, 4'h0, 16'h0001));
-        send_pkt(mk_pkt_4x4(OP_LOAD_B,   NODE_00, 4'd0, 4'h0, 16'h0001));
+        send_pkt(mk_pkt_4x4(OP_LOAD_A,   NODE_00, 4'd0, 4'h0, 16'h3E00)); // lane0=1.0
+        send_pkt(mk_pkt_4x4(OP_LOAD_A,   NODE_00, 4'd0, 4'h1, 16'h4000)); // lane1=2.0
+        send_pkt(mk_pkt_4x4(OP_LOAD_A,   NODE_00, 4'd0, 4'h2, 16'h4100)); // lane2=3.0
+        send_pkt(mk_pkt_4x4(OP_LOAD_A,   NODE_00, 4'd0, 4'h3, 16'h4200)); // lane3=4.0
+        send_pkt(mk_pkt_4x4(OP_LOAD_B,   NODE_00, 4'd0, 4'h0, 16'h3E00));
+        send_pkt(mk_pkt_4x4(OP_LOAD_B,   NODE_00, 4'd0, 4'h1, 16'h4000));
+        send_pkt(mk_pkt_4x4(OP_LOAD_B,   NODE_00, 4'd0, 4'h2, 16'h4100));
+        send_pkt(mk_pkt_4x4(OP_LOAD_B,   NODE_00, 4'd0, 4'h3, 16'h4200));
         send_pkt(mk_pkt_4x4(OP_COMPUTE,  NODE_00, 4'd0, 4'h0, 16'h0));
         send_pkt(mk_pkt_4x4(OP_READ_RES, NODE_00, 4'd0, 4'h0, 16'h0));
 
-        // Expect RESULT packet
-        wait_response(resp_pkt, 200);
-        resp_op = resp_pkt[31:28];
-        if (resp_op == OP_RESULT) begin
-            $display("[TG-Max-06] RESULT packet received: 0x%08X", resp_pkt);
-        end else begin
-            $display("[TG-Max-06] WARN: expected RESULT, got op=0x%X", resp_op);
-        end
+        // Capture both packets with host_out_ready held HIGH throughout.
+        // Using a single counter loop to capture exactly 2 packets in order.
+        begin : tg06_capture
+            integer tg06_pkt_count, tg06_t;
+            reg [31:0] tg06_pkt [0:1];
+            tg06_pkt_count = 0;
+            tg06_t = 0;
+            host_out_ready <= 1'b1;
+            while (tg06_pkt_count < 2 && tg06_t < 400) begin
+                @(posedge clk);
+                tg06_t = tg06_t + 1;
+                if (host_out_valid) begin
+                    tg06_pkt[tg06_pkt_count] = host_out_pkt;
+                    tg06_pkt_count = tg06_pkt_count + 1;
+                end
+            end
+            host_out_ready <= 1'b0;
 
-        // Expect RECEIPT packet
-        wait_response(rcpt_pkt, 200);
-        resp_op = rcpt_pkt[31:28];
-        if (resp_op == OP_RECEIPT) begin
-            receipt_count = receipt_count + 1;
-            $display("[TG-Max-06] RECEIPT packet received: 0x%08X — PASS", rcpt_pkt);
-            $display("[TG-Max-06]   tile_id=0x%X op=0x%X checksum=0x%02X job_lo=0x%02X",
-                     rcpt_pkt[25:24], rcpt_pkt[23:20],
-                     rcpt_pkt[15:8], rcpt_pkt[7:0]);
-        end else begin
-            $display("[TG-Max-06] WARN: expected RECEIPT, got op=0x%X", resp_op);
+            // Evaluate the two captured packets
+            resp_op = (tg06_pkt_count > 0) ? tg06_pkt[0][31:28] : 4'hD;
+            resp_pkt = (tg06_pkt_count > 0) ? tg06_pkt[0] : 32'hDEADDEAD;
+            rcpt_pkt = (tg06_pkt_count > 1) ? tg06_pkt[1] : 32'hDEADDEAD;
+
+            if (resp_op == OP_RESULT) begin
+                $display("[TG-Max-06] RESULT packet received: 0x%08X (pl=0x%04X)",
+                         resp_pkt, resp_pkt[15:0]);
+            end else begin
+                $display("[TG-Max-06] WARN: expected RESULT, got op=0x%X pkt=0x%08X",
+                         resp_op, resp_pkt);
+            end
+
+            resp_op = rcpt_pkt[31:28];
+            if (resp_op == OP_RECEIPT) begin
+                receipt_count = receipt_count + 1;
+                $display("[TG-Max-06] RECEIPT packet received: 0x%08X — PASS", rcpt_pkt);
+                $display("[TG-Max-06]   tile_id=0x%X op_code=0x%X checksum=0x%02X job_lo=0x%02X",
+                         rcpt_pkt[25:24], rcpt_pkt[23:20],
+                         rcpt_pkt[15:8], rcpt_pkt[7:0]);
+            end else begin
+                $display("[TG-Max-06] WARN: expected RECEIPT, got op=0x%X pkt=0x%08X",
+                         resp_op, rcpt_pkt);
+            end
         end
 
         tg_max_06_pass = (receipt_count > 0);

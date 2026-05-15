@@ -81,13 +81,33 @@ module trinity_mesh_4x4 (
             // Slice raw packet from flat bus
             assign t_in_pkt_raw[i] = t_pkt_flat[(i+1)*`TRN_PKT_W-1 -: `TRN_PKT_W];
 
-            // ICA-002 fix: rewrite DST field bits [27:26] to tile_id[1:0]
-            // so trinity_gf16_tile's `pkt_for_me` check passes.
-            // Bits [31:28]=op, [27:26]=dst_lo (rewritten), [25:24]=src, [23:0]=rest.
+            // ICA-M-002 FIX (W15-TT-E, 2026-05-15):
+            // The 4x4 extended packet format from the testbench / host is:
+            //   [31:28]=op, [27:24]=dst4, [23:20]=src4, [19:16]=lane4, [15:0]=pl
+            // but trinity_gf16_tile reads via trinity_packet.vh macros:
+            //   TRN_PKT_DST  = p[27:26]  (2-bit)
+            //   TRN_PKT_SRC  = p[25:24]  (2-bit)
+            //   TRN_PKT_LANE = p[23:20]  (4-bit)
+            //   TRN_PKT_PAYLOAD = p[15:0]
+            // Previous rewrite only patched DST but left src4 at [23:20] where
+            // TRN_PKT_LANE looks — causing ALL LOAD_A/B packets to hit lane 0
+            // regardless of the intended lane (ICA-M-002 root cause).
+            //
+            // Correct rewrite maps the 4x4 extended fields to the 2x2 macro layout:
+            //   [31:28] = op            (unchanged)
+            //   [27:26] = i[1:0]        (tile_id — for pkt_for_me)
+            //   [25:24] = raw[21:20]    (src4[1:0] — where TRN_PKT_SRC reads)
+            //   [23:20] = raw[19:16]    (lane4[3:0] — where TRN_PKT_LANE reads)
+            //   [19:16] = 4'h0          (reserved field in TRN_MK_PKT layout)
+            //   [15:0]  = raw[15:0]     (payload — unchanged)
+            // No trinity_packet.vh ABI change; only the mesh adaptor is updated.
             assign t_in_pkt[i] = {
-                t_in_pkt_raw[i][31:28],   // op[3:0]      — unchanged
-                i[1:0],                    // dst[1:0]     — forced to tile_id[1:0]
-                t_in_pkt_raw[i][25:0]     // src+lane+pl  — unchanged
+                t_in_pkt_raw[i][31:28],  // op[3:0]         — unchanged
+                i[1:0],                   // dst[1:0]        — forced to tile_id[1:0]
+                t_in_pkt_raw[i][21:20],  // src4[1:0]       — TRN_PKT_SRC = p[25:24]
+                t_in_pkt_raw[i][19:16],  // lane4[3:0]      — TRN_PKT_LANE = p[23:20]
+                4'h0,                     // reserved        — TRN_MK_PKT [19:16]
+                t_in_pkt_raw[i][15:0]    // payload[15:0]   — unchanged
             };
 
             // Return: pack tile output into flat bus
