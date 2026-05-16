@@ -13,9 +13,11 @@ project:
     MLP), bpb_counter (on-chip cross-entropy/BPB), blake3_anchor +
     multi_tile_receipt + crc32_receipt + hwrng_lfsr (G4 DePIN signing),
     alu9_decoder (9-instruction Trinity ternary ALU, t27 ISA preview),
-    ring27_memory (27-cell 3^3 ternary memory), phi_pll_div, wishbone_full,
+    ring27_memory (27-cell 3^3 ternary memory), phi_pll_div,
+    phi_pll_div_40mhz (S-15 retune: 40 MHz, 8/13 Bresenham convergent),
+    gf16_dot4_pipe2 (2-stage pipeline, 2x throughput), wishbone_full,
     wb_status_reg. FPGA-validated at 323 MHz on XC7A100T; silicon target
-    50 MHz @ SKY130A 60% density.
+    40 MHz @ SKY130A 60% density (L-S15 PLL retune).
 
     Ten chip-market differentiators (no competitor has all ten — Hailo-8,
     MediaTek D9400 NPU890, QC Cloud AI 100 Ultra, Axelera Metis M.2,
@@ -43,8 +45,11 @@ project:
     compliance), tt-trinity-gf16 docs/architecture/TRI_NET_SHUTTLE_TRIAD.md
     (canonical Triad architecture spec).
     Defense: 2026-06-15.
+    L-S15: PLL retune — clock dropped 50 MHz -> 40 MHz; 2x throughput via
+    gf16_dot4_pipe2 pipeline stage. Projected: ~88-110 TOPS/W (+70 TOPS/W
+    toward v3 roadmap goal 180-220 TOPS/W).
   language:     "Verilog"
-  clock_hz:     50000000
+  clock_hz:     40000000  # L-S15 PLL retune: 50 MHz -> 40 MHz (CLOCK_PERIOD 25 ns)
 
   tiles: "8x2"  # bumped 2x2 -> 8x2 in PR #8 (Wave-26b SUPER-CROWN) to accommodate full Trinity SoC mini: 4 GF16 tiles + mesh + master FSM + 6 CROWN POST modules + 16x16 ternary matmul + BitNet encoder + BPB counter + BLAKE3 anchor + multi-tile RECEIPT + ALU-9 decoder + RING27 memory + phi-PLL + Wishbone-lite full. Target ~16000 gates @ 60% density on SKY130.
 
@@ -57,6 +62,7 @@ project:
     - "gf16_dot4.v"
     - "gf16_dot8.v"
     - "gf16_dot4_sparse.v"
+    - "gf16_dot4_pipe2.v"
     - "trinity_gf16_tile.v"
     - "trinity_router_2x2.v"
     - "trinity_mesh_2x2.v"
@@ -77,6 +83,7 @@ project:
     - "alu9_decoder.v"
     - "ring27_memory.v"
     - "phi_pll_div.v"
+    - "phi_pll_div_40mhz.v"
     - "wishbone_full.v"
     - "gf16_mesh_2x2_top.v"
 
