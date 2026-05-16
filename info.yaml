@@ -1,4 +1,18 @@
 # Tiny Tapeout project information
+# L-S29 MULTI-VT DUAL-LIB ZONING (feat/lane-l-s29-multi-vt)
+# Primary standard-cell library: sky130_fd_sc_hd (SVT)
+# Leakage-reduction target library: sky130_fd_sc_hdll (HVT)
+# Low-activity blocks targeted for hdll zoning:
+#   lucas_rom, crc32_receipt, blake3_anchor, gf16_mul
+# Expected static leakage saving: ~30% (5-10x lower per-cell leakage on hdll
+# vs hd; block-level mixed-mode zoning at ~30% of total cell count).
+# See docs/L-DPC22-K-DUAL-LIB-LANE-L.md for full specification.
+# Reference: https://skywater-pdk.readthedocs.io/en/main/contents/libraries/foundry-provided.html
+# Pattern mirrored from gHashTag/tt-trinity-gamma docs/L-DPC22-K-DUAL-LIB.md (L-DPC22-K spec).
+# G-13 gate: mixed hd+hdll closes timing if WNS>=0; rollback to pure hd if WNS<0.
+# R-SI-1 verified: Lane L is config/docs only — zero changes to src/*.v RTL.
+yaml_version: 6
+
 project:
   title:        "TRI-1 Mid — Trinity GF16 16-cell SUPER-CROWN SoC"
   author:       "Dmitrii Vasilev · Trinity Stack"
@@ -33,6 +47,16 @@ project:
            297 Qed and 141 Admitted at submission (the older "84 theorems"
            figure is folklore predating the 2026-05-12 consolidation and is
            explicitly retired here).
+
+    L-S29 dual-lib: sky130_fd_sc_hd primary (SVT) + sky130_fd_sc_hdll
+    zoning intent for low-activity blocks (lucas_rom, crc32_receipt,
+    blake3_anchor, gf16_mul). Target: ~30% static leakage reduction,
+    ~+20 TOPS/W idle power efficiency gain. HVT cells (hdll) share the
+    identical 0.46x2.72 um site and pin grid with hd — placement-transparent
+    swap, DRC clean when intermingled. G-13 falsification gate: hdll mix
+    accepted only if WNS>=0 post-CTS; rolls back to pure hd if timing fails.
+    Lane L config/docs change only — R-SI-1 compliant, zero RTL delta.
+    See docs/L-DPC22-K-DUAL-LIB-LANE-L.md.
 
     Anchor: phi^2 + phi^-2 = 3 (Trinity algebraic identity).
     DOI: 10.5281/zenodo.19227877.
