@@ -57,6 +57,8 @@ project:
     - "gf16_dot4.v"
     - "gf16_dot8.v"
     - "gf16_dot4_sparse.v"
+    - "zero_mask_detector_v2.v"
+    - "sparse_pe_v2.v"
     - "trinity_gf16_tile.v"
     - "trinity_router_2x2.v"
     - "trinity_mesh_2x2.v"
