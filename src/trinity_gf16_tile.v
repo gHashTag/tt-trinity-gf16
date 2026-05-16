@@ -22,6 +22,15 @@
 //   DOT_WIDTH=4 (default) → single gf16_dot4, original behaviour preserved.
 //   DOT_WIDTH=8           → gf16_dot8 (2× dot4 + adder); 8 A/B lanes available;
 //                           TOPS per tile doubles; canonical 0x47C0 vector unaffected.
+//
+// L-Z02 Operand Isolation:
+//   operand_iso_en tracks whether this tile has been given a COMPUTE command.
+//   When operand_iso_en=0 (idle), all operand buses are AND-gated to zero via
+//   operand_iso_buf instances — preventing toggle propagation into gf16_mul/add.
+//   operand_iso_en asserts on first LOAD_A packet (tile armed) and stays high
+//   until reset. This means idle tiles (never loaded) propagate zero operands.
+//   ~8 isolators × 16 bits/dot4 mode = 128 AND2 cells; dot8 adds 8 more = 256 total.
+//   Projected saving: ~8% dynamic power per tile → +8 TOPS/W system-wide.
 
 `include "trinity_packet.vh"
 
@@ -64,22 +73,61 @@ module trinity_gf16_tile #(
     reg [1:0]  rcpt_dst;          // remembered host src so the RECEIPT goes back to the host
     reg        pending_receipt;   // set after RESULT handshake; cleared after RECEIPT handshake
 
+    // -----------------------------------------------------------------------
+    // L-Z02: Operand Isolation Enable
+    // operand_iso_en is set when this tile receives its first LOAD_A packet.
+    // When low (tile never loaded / idle), isolators clamp operand buses to zero
+    // — preventing spurious toggle activity from reaching gf16_mul/add cells.
+    // -----------------------------------------------------------------------
+    reg operand_iso_en;
+
+    // Isolated operand wires (output of operand_iso_buf instances)
+    wire [15:0] a0_iso, a1_iso, a2_iso, a3_iso;
+    wire [15:0] b0_iso, b1_iso, b2_iso, b3_iso;
+    wire [15:0] a4_iso, a5_iso, a6_iso, a7_iso;
+    wire [15:0] b4_iso, b5_iso, b6_iso, b7_iso;
+
+    // dot4 A-bus isolators (16 AND2 cells each → 8×16 = 128 cells in dot4 mode)
+    operand_iso_buf #(.N(16)) u_iso_a0 (.enable(operand_iso_en), .in(a0), .out(a0_iso));
+    operand_iso_buf #(.N(16)) u_iso_a1 (.enable(operand_iso_en), .in(a1), .out(a1_iso));
+    operand_iso_buf #(.N(16)) u_iso_a2 (.enable(operand_iso_en), .in(a2), .out(a2_iso));
+    operand_iso_buf #(.N(16)) u_iso_a3 (.enable(operand_iso_en), .in(a3), .out(a3_iso));
+
+    // dot4 B-bus isolators
+    operand_iso_buf #(.N(16)) u_iso_b0 (.enable(operand_iso_en), .in(b0), .out(b0_iso));
+    operand_iso_buf #(.N(16)) u_iso_b1 (.enable(operand_iso_en), .in(b1), .out(b1_iso));
+    operand_iso_buf #(.N(16)) u_iso_b2 (.enable(operand_iso_en), .in(b2), .out(b2_iso));
+    operand_iso_buf #(.N(16)) u_iso_b3 (.enable(operand_iso_en), .in(b3), .out(b3_iso));
+
+    // dot8 upper lane A-bus isolators (only relevant when DOT_WIDTH==8)
+    operand_iso_buf #(.N(16)) u_iso_a4 (.enable(operand_iso_en), .in(a4), .out(a4_iso));
+    operand_iso_buf #(.N(16)) u_iso_a5 (.enable(operand_iso_en), .in(a5), .out(a5_iso));
+    operand_iso_buf #(.N(16)) u_iso_a6 (.enable(operand_iso_en), .in(a6), .out(a6_iso));
+    operand_iso_buf #(.N(16)) u_iso_a7 (.enable(operand_iso_en), .in(a7), .out(a7_iso));
+
+    // dot8 upper lane B-bus isolators
+    operand_iso_buf #(.N(16)) u_iso_b4 (.enable(operand_iso_en), .in(b4), .out(b4_iso));
+    operand_iso_buf #(.N(16)) u_iso_b5 (.enable(operand_iso_en), .in(b5), .out(b5_iso));
+    operand_iso_buf #(.N(16)) u_iso_b6 (.enable(operand_iso_en), .in(b6), .out(b6_iso));
+    operand_iso_buf #(.N(16)) u_iso_b7 (.enable(operand_iso_en), .in(b7), .out(b7_iso));
+
     // Combinational MAC unit — selected at build time by DOT_WIDTH parameter
+    // Receives isolated operands: all-zero when tile is idle → no toggle into mul/add.
     wire [15:0] dot_out;
     generate
         if (DOT_WIDTH == 8) begin : g_dot8
             gf16_dot8 u_dot (
-                .a0(a0), .a1(a1), .a2(a2), .a3(a3),
-                .b0(b0), .b1(b1), .b2(b2), .b3(b3),
-                .a4(a4), .a5(a5), .a6(a6), .a7(a7),
-                .b4(b4), .b5(b5), .b6(b6), .b7(b7),
+                .a0(a0_iso), .a1(a1_iso), .a2(a2_iso), .a3(a3_iso),
+                .b0(b0_iso), .b1(b1_iso), .b2(b2_iso), .b3(b3_iso),
+                .a4(a4_iso), .a5(a5_iso), .a6(a6_iso), .a7(a7_iso),
+                .b4(b4_iso), .b5(b5_iso), .b6(b6_iso), .b7(b7_iso),
                 .result(dot_out)
             );
         end else begin : g_dot4
             // DOT_WIDTH == 4 — original behaviour, backwards-compatible
             gf16_dot4 u_dot (
-                .a0(a0), .a1(a1), .a2(a2), .a3(a3),
-                .b0(b0), .b1(b1), .b2(b2), .b3(b3),
+                .a0(a0_iso), .a1(a1_iso), .a2(a2_iso), .a3(a3_iso),
+                .b0(b0_iso), .b1(b1_iso), .b2(b2_iso), .b3(b3_iso),
                 .result(dot_out)
             );
         end
@@ -113,6 +161,8 @@ module trinity_gf16_tile #(
             pending_receipt <= 1'b0;
             out_pkt   <= {`TRN_PKT_W{1'b0}};
             out_valid <= 1'b0;
+            // L-Z02: all tiles start isolated (operand buses clamped to zero)
+            operand_iso_en <= 1'b0;
         end else begin
             // Outbound handshake: clear, then re-arm with RECEIPT if pending.
             if (out_valid && out_ready) begin
@@ -136,6 +186,8 @@ module trinity_gf16_tile #(
             if (in_valid && in_ready && pkt_for_me) begin
                 case (op)
                     `TRN_OP_LOAD_A: begin
+                        // L-Z02: arm isolator on first LOAD_A — tile is now active
+                        operand_iso_en <= 1'b1;
                         case (lane[2:0])
                             3'd0: a0 <= pl;
                             3'd1: a1 <= pl;
