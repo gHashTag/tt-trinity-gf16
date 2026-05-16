@@ -35,6 +35,11 @@ OP_LOAD_B    = 0x2
 OP_COMPUTE   = 0x3
 OP_READ_RES  = 0x4
 OP_RESULT    = 0x5
+OP_RECEIPT   = 0x5  # SG1-09: silicon-anchored receipt (PR #6 TRN_OP_RECEIPT) shares opcode 0x5
+OP_READ_REC  = 0x6  # SG1-09: explicit receipt-read packet (host -> FPGA)
+
+# SG1-10: SUPER-CROWN tile fan-out (PR #8 Wave-26b: 8x2 = 16 tiles)
+SUPERCROWN_TILES = list(range(16))
 
 # GF16 (half-precision IEEE-754) operands for 1.0, 2.0, 3.0, 4.0
 GF16_OPS = [0x3E00, 0x4000, 0x4100, 0x4200]
@@ -68,6 +73,25 @@ def canonical_job(tile_id: int = 0, lane: int = 0) -> List[int]:
         mk_pkt(OP_LOAD_B,   dst=tile_id, lane=lane, payload=GF16_OPS[3]),
         mk_pkt(OP_COMPUTE,  dst=tile_id, lane=lane, payload=0x0000),
         mk_pkt(OP_READ_RES, dst=tile_id, lane=lane, payload=0x0000),
+    ]
+
+
+def receipt_job(tile_id: int = 0, lane: int = 0, nonce: int = 1) -> List[int]:
+    """SG1-09: dot4 + READ_RECEIPT instead of READ_RESULT.
+
+    PR #6 silicon-anchored receipt engine: after COMPUTE, host emits
+    OP_READ_REC with the desired nonce in the payload. FPGA returns an
+    OP_RECEIPT packet whose payload echoes the dot4 result (0x47C0) and
+    whose src/lane carry the nonce LSBs back (so we can prove the receipt
+    is bound to *this* job and not a stale FIFO entry).
+    """
+    return [
+        mk_pkt(OP_LOAD_A,   dst=tile_id, lane=lane, payload=GF16_OPS[0]),
+        mk_pkt(OP_LOAD_A,   dst=tile_id, lane=lane, payload=GF16_OPS[1]),
+        mk_pkt(OP_LOAD_B,   dst=tile_id, lane=lane, payload=GF16_OPS[2]),
+        mk_pkt(OP_LOAD_B,   dst=tile_id, lane=lane, payload=GF16_OPS[3]),
+        mk_pkt(OP_COMPUTE,  dst=tile_id, lane=lane, payload=0x0000),
+        mk_pkt(OP_READ_REC, dst=tile_id, lane=lane, payload=(nonce & 0xFFFF)),
     ]
 
 
@@ -111,21 +135,50 @@ def read_packet(ft, timeout_ms: int = 1000) -> int:
     return word
 
 
-def run_jobs(ft, n_jobs: int, out_path: str) -> Tuple[int, int]:
+def run_jobs(ft, n_jobs: int, out_path: str, probe: str = "dot4") -> Tuple[int, int, float]:
     pass_n, fail_n = 0, 0
     t_start = time.time()
     with open(out_path, "w") as fout:
         for job_id in range(1, n_jobs + 1):
             nonce = job_id
-            words = canonical_job(tile_id=0, lane=0)
+
+            # --- per-probe job synthesis ------------------------------
+            if probe == "dot4":
+                tile_id = 0
+                words = canonical_job(tile_id=tile_id, lane=0)
+                expected_op = OP_RESULT
+                require_nonce_echo = False
+                op_label = "GF16_DOT4"
+            elif probe == "receipt":
+                # SG1-09: receipt engine roundtrip (PR #6).
+                tile_id = 0
+                words = receipt_job(tile_id=tile_id, lane=0, nonce=nonce)
+                expected_op = OP_RECEIPT
+                require_nonce_echo = True
+                op_label = "GF16_DOT4_RECEIPT"
+            elif probe == "supercrown":
+                # SG1-10: round-robin across all 16 SUPER-CROWN tiles (PR #8).
+                tile_id = SUPERCROWN_TILES[(job_id - 1) % len(SUPERCROWN_TILES)]
+                words = canonical_job(tile_id=tile_id, lane=0)
+                expected_op = OP_RESULT
+                require_nonce_echo = False
+                op_label = "GF16_DOT4_TILE_RR"
+            else:
+                print(f"REFUSAL: unknown --probe '{probe}'", file=sys.stderr)
+                sys.exit(2)
+
             send_packets(ft, words)
 
             try:
                 resp = read_packet(ft, timeout_ms=2000)
-                op, dst, src, lane, observed = parse_pkt(resp)
-                status = "pass" if (op == OP_RESULT and observed == EXPECTED_RESULT) else "fail"
-            except TimeoutError as e:
-                op, dst, src, lane, observed = (0, 0, 0, 0, 0)
+                op, dst, src, lane_r, observed = parse_pkt(resp)
+                ok_op     = (op == expected_op)
+                ok_value  = (observed == EXPECTED_RESULT)
+                ok_tile   = (dst == tile_id) if probe == "supercrown" else True
+                ok_nonce  = (((lane_r << 2) | src) & 0x3F) == (nonce & 0x3F) if require_nonce_echo else True
+                status = "pass" if (ok_op and ok_value and ok_tile and ok_nonce) else "fail"
+            except TimeoutError:
+                op, dst, src, lane_r, observed = (0, 0, 0, 0, 0)
                 status = "timeout"
 
             if status == "pass":
@@ -135,17 +188,21 @@ def run_jobs(ft, n_jobs: int, out_path: str) -> Tuple[int, int]:
 
             checksum = sum(GF16_OPS) & 0xFF
             receipt = {
-                "job_id":   job_id,
-                "tile_id":  0,
-                "op":       "GF16_DOT4",
-                "expected": f"0x{EXPECTED_RESULT:04X}",
-                "observed": f"0x{observed:04X}",
-                "status":   status,
-                "nonce":    nonce,
-                "checksum": checksum,
-                "node":     "silicon-qmtech-xc7a100t",
-                "backend":  "ftd3xx",
-                "ts":       time.time(),
+                "job_id":      job_id,
+                "tile_id":     tile_id,
+                "op":          op_label,
+                "probe":       probe,
+                "expected":    f"0x{EXPECTED_RESULT:04X}",
+                "observed":    f"0x{observed:04X}",
+                "resp_op":     f"0x{op:X}",
+                "resp_dst":    dst,
+                "resp_nonce_lsb": ((lane_r << 2) | src) & 0x3F,
+                "status":      status,
+                "nonce":       nonce,
+                "checksum":    checksum,
+                "node":        "silicon-qmtech-xc7a100t",
+                "backend":     "ftd3xx",
+                "ts":          time.time(),
             }
             fout.write(json.dumps(receipt) + "\n")
     dt = time.time() - t_start
@@ -157,6 +214,10 @@ def main() -> int:
     ap.add_argument("--jobs", type=int, default=100, help="number of GF16 dot4 jobs")
     ap.add_argument("--out",  type=str, default="silicon_g1_receipts.jsonl",
                     help="JSONL receipt log output path")
+    ap.add_argument("--probe", type=str, default="dot4",
+                    choices=["dot4", "receipt", "supercrown"],
+                    help=("SG1-06 dot4 (default) | SG1-09 receipt engine roundtrip | "
+                          "SG1-10 SUPER-CROWN 16-tile coverage"))
     ap.add_argument("--no-device-check", action="store_true",
                     help=argparse.SUPPRESS)  # debugging only
     args = ap.parse_args()
@@ -168,18 +229,25 @@ def main() -> int:
 
     out_path = args.out
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
-    pass_n, fail_n, dt = run_jobs(ft, args.jobs, out_path)
+    pass_n, fail_n, dt = run_jobs(ft, args.jobs, out_path, probe=args.probe)
 
-    print(f"==> {pass_n}/{args.jobs} passed, {fail_n} failed, {dt:.2f}s elapsed")
+    print(f"==> probe={args.probe} jobs={args.jobs} pass={pass_n} fail={fail_n} "
+          f"elapsed={dt:.2f}s")
     print(f"==> receipts -> {out_path}")
     sha = hashlib.sha256(open(out_path, "rb").read()).hexdigest()[:16]
     print(f"==> ledger sha256[0:16] = {sha}")
 
+    gate_name = {
+        "dot4":       "SILICON_G1_SG1-06",
+        "receipt":    "SILICON_G1_SG1-09",
+        "supercrown": "SILICON_G1_SG1-10",
+    }[args.probe]
+
     if pass_n == args.jobs and fail_n == 0:
-        print("SILICON_G1_GATE_GREEN: 100/100 0x47C0 received from real FPGA")
+        print(f"{gate_name}_GATE_GREEN: {pass_n}/{args.jobs} 0x47C0 received from real FPGA")
         return 0
     else:
-        print(f"SILICON_G1_GATE_RED: only {pass_n}/{args.jobs} passed")
+        print(f"{gate_name}_GATE_RED: only {pass_n}/{args.jobs} passed")
         return 1
 
 

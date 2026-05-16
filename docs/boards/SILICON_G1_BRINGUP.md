@@ -129,9 +129,18 @@ Expected exit code: **0**.
 | **SG1-06** | `silicon_g1_runner.py --jobs 100` | exit 0 + `100/100 0x47C0` line | any `observed ≠ 0x47C0` |
 | **SG1-07** | Ledger byte sha256 | reproducible across reruns up to nonce/ts | non-deterministic compute |
 | **SG1-08** | No Linux/CPU/AXI on chip | grep utilization.rpt for `MicroBlaze`, `AXI*`, `LMB*` → 0 hits | any soft-CPU/bus IP appears |
+| **SG1-09** | Receipt engine roundtrip (PR #6 TRN_OP_RECEIPT) | `silicon_g1_runner.py --probe receipt --jobs 32` → 32/32 `op=0x5` with `observed=0x47C0` AND a non-zero `nonce` echoed in each reply | any receipt op-field mismatch or stripped nonce |
+| **SG1-10** | SUPER-CROWN 8×2 tile coverage (PR #8 Wave-26b) | `silicon_g1_runner.py --probe supercrown --jobs 16` drives `tile_id ∈ {0..15}` round-robin and every tile returns `0x47C0` | any tile silent or wrong tile responds |
+| **SG1-11** | 16k-gate timing on QMTECH | `report_timing_summary` on the post-route DCP shows WNS ≥ 0 ns at both 50 MHz and 100 MHz on the SUPER-CROWN top (16 tiles + receipt engine instantiated) | any failed setup/hold path |
 
 ANY of SG1-01..SG1-06 = ❌ FAIL ⇒ TRI-NET-G1 hypothesis (H1) marked
 **FALSIFIED** for the silicon lane; lane returns to RTL/sim for repair.
+
+SG1-09 / SG1-10 / SG1-11 are **extension gates** added in the silicon-G1
+follow-up to prove that the merge-time content of `main` (PR #6 silicon-
+anchored receipts + PR #8 Wave-26b SUPER-CROWN) actually lights up on
+physical silicon, not just the bare GF16 dot4 of PR #2. They are pre-
+registered against `main@a423ed5` and frozen BEFORE the first physical run.
 
 ## 7. After silicon-G1 GREEN — next lane
 
