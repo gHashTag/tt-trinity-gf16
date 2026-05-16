@@ -9,6 +9,14 @@
 
 `include "trinity_packet.vh"
 
+// L-Z02: Operand isolation is implemented inside each trinity_gf16_tile instance via
+// operand_iso_buf cells. The mesh fabric does not need additional isolators at this
+// boundary — each tile's internal operand_iso_en register gates all operand buses to
+// zero until the tile receives its first LOAD_A packet. Idle tiles therefore generate
+// zero toggle activity downstream in gf16_mul/add/dot4 lanes.
+// Cell budget contribution: 4 tiles × 16 isolators × 16 bits = 1024 AND2 cells
+// (dot8 mode); 4 × 8 × 16 = 512 AND2 cells (dot4 mode).
+
 module trinity_mesh_2x2 (
     input  wire                       clk,
     input  wire                       rst_n,

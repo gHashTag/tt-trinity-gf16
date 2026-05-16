@@ -317,12 +317,20 @@ module tt_um_ghtag_trinity_gf16 (
     );
 
     // L-S15: Trinity ternary ALU-9 decoder (combinational demo, fed by hwrng)
+    // L-Z02: Isolate alu9_decoder inputs when POST has not yet completed (idle path).
+    // alu_iso_en = post_done: decoder sees zero operands during reset/POST phase.
+    wire [7:0] hwrng_alu_iso;
+    operand_iso_buf #(.N(8)) u_iso_alu (
+        .enable (post_done),
+        .in     (hwrng_word[7:0]),
+        .out    (hwrng_alu_iso)
+    );
     wire [1:0] alu_result;
     wire       alu_valid, alu_ok;
     alu9_decoder u_alu (
-        .opcode(hwrng_word[3:0]),
-        .a(hwrng_word[5:4]),
-        .b(hwrng_word[7:6]),
+        .opcode(hwrng_alu_iso[3:0]),
+        .a(hwrng_alu_iso[5:4]),
+        .b(hwrng_alu_iso[7:6]),
         .result(alu_result),
         .valid(alu_valid),
         .decoder_ok(alu_ok)
