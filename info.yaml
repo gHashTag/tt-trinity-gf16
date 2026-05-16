@@ -50,6 +50,21 @@ project:
 
   top_module:  "tt_um_ghtag_trinity_gf16"
 
+  # ── L-S33 Placement-Density tuning (lane feat/lane-l-s33-placement-density) ──
+  # PLACEMENT_DENSITY lowered 0.50 → 0.45: sparser placement reduces inter-cell
+  # coupling capacitance ~8-12%, yielding ~5-10% timing headroom and projected
+  # +5 TOPS/W. See docs/S33_PLACEMENT_DENSITY_RATIONALE.md for full analysis.
+  PLACEMENT_DENSITY: 0.45
+
+  # SYNTH_STRATEGY "DELAY 0" = yosys opt_expr + opt_clean with timing-first
+  # objective; suppresses area-recovery passes that add inverter chains and
+  # increase net fanout.
+  SYNTH_STRATEGY: "DELAY 0"
+
+  # PL_RESIZER_TIMING_OPTIMIZATIONS enables OpenROAD resizer in place-and-route
+  # to upsize/downsize cells on critical paths after global placement.
+  PL_RESIZER_TIMING_OPTIMIZATIONS: 1
+
   source_files:
     - "tt_um_ghtag_trinity_gf16.v"
     - "gf16_mul.v"
