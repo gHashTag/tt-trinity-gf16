@@ -1,3 +1,16 @@
+> ## ℹ️ Status: TTSKY26a fab in progress (GF16 dot4 mesh only)
+>
+> This repository represents the **TTSKY26a** silicon submission — a GF16 dot4 mesh kernel that was submitted before the 2026-05-11 deadline. Tape-out scheduled 2026-10-28.
+>
+> The **full Trinity SUPER-CROWN SoC** (18 modules: BLAKE3, BPB, ALU-9, RING27, BitNet, VSA, Lucas POST) has been forked into a **new dedicated repo** for the **TTSKY26b** submission as part of the **Trinity TRI-NET** sacred-constant triplet:
+>
+> - 🔥 **e-engine** → [tt-trinity-euler](https://github.com/gHashTag/tt-trinity-euler) — 8×2 SUPER-CROWN SoC @ TTSKY26b
+> - **φ-anchor** → [tt-trinity-phi](https://github.com/gHashTag/tt-trinity-phi) — 1×1 Lucas POST @ TTSKY26b (was tt-trinity-nano)
+> - **γ-surface** → [tt-trinity-gamma](https://github.com/gHashTag/tt-trinity-gamma) — 8×4 mesh @ TTSKY26b (was tt-trinity-max-true)
+>
+> This repo continues to track the TTSKY26a silicon. New SUPER-CROWN development happens in **tt-trinity-euler**.
+
+
 # Trinity GF16 — v0 RTL Mesh-Computer (TinyTapeout)
 
 Bare-RTL **processorless** prototype of a GF16 dot4 mesh computer.
