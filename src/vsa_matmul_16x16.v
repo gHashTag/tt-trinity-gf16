@@ -31,6 +31,12 @@ module vsa_matmul_16x16 (
     reg         busy;
     reg         pipe_valid_in;
 
+    // fanout-split: one registered valid driver per row (16 drivers × 16 sinks
+    // each = ~288 fanout per driver, vs. original 4609-fanout broadcast).
+    // Resolves u_mm16.gen_row[0].gen_col[0].u_pc.s1_same[0] setup violation
+    // at TT 25C/1.80V under 20 ns clock. R-SI-1 compliant (no `*`).
+    reg [15:0] pipe_valid_row;
+
     // 256 pipelined inner-product units (16×16)
     wire [255:0] pc_valid_out;
     wire [7:0]   pc_result [0:255];
@@ -42,7 +48,7 @@ module vsa_matmul_16x16 (
                 gf16_popcount16 #(.N_ELEMS(16), .LATENCY(LATENCY)) u_pc (
                     .clk      (clk),
                     .rst_n    (rst_n),
-                    .valid_in (pipe_valid_in),
+                    .valid_in (pipe_valid_row[gi]),
                     .a_row    (a_reg[32*gi +: 32]),
                     .b_row    (b_reg[32*gj +: 32]),
                     .valid_out(pc_valid_out[gi*16 + gj]),
@@ -57,6 +63,19 @@ module vsa_matmul_16x16 (
     localparam ST_LATCH = 2'd1;
     localparam ST_PIPE  = 2'd2;
     localparam ST_DONE  = 2'd3;
+
+    // Register pipe_valid_row — per-row fanout-split buffer stage.
+    // Each bit of pipe_valid_row is driven by exactly one flop and
+    // fans out to 16 PC units (one row), keeping fanout ≤ 16 per driver.
+    integer ri;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            pipe_valid_row <= 16'b0;
+        end else begin
+            for (ri = 0; ri < 16; ri = ri + 1)
+                pipe_valid_row[ri] <= pipe_valid_in;
+        end
+    end
 
     integer ci, cj;
     always @(posedge clk or negedge rst_n) begin

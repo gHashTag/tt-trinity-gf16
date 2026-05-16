@@ -47,44 +47,56 @@ module gf16_popcount16 #(
         end
     endgenerate
 
-    (* keep = "true" *) (* no_retiming = "true" *) reg [15:0] s1_same, s1_diff;
-    (* keep = "true" *) (* no_retiming = "true" *) reg        s1_valid;
+    // fanout-split: replicate s1_same/s1_diff into lo[7:0] and hi[7:0]
+    // banks, each driven by a separate register. This limits s1_same[k]
+    // and s1_diff[k] fanout to the lo-bank adder tree only (~4 loads each)
+    // rather than the full 16-element tree, resolving the 4609-fanout
+    // setup violation on s1_same[0] at TT 25C/1.80V / 20 ns clock.
+    // ANCHOR: φ²+φ⁻²=3 · DOI 10.5281/zenodo.19227877
+    (* keep = "true" *) (* no_retiming = "true" *) reg [7:0] s1_same_lo, s1_same_hi;
+    (* keep = "true" *) (* no_retiming = "true" *) reg [7:0] s1_diff_lo,  s1_diff_hi;
+    (* keep = "true" *) (* no_retiming = "true" *) reg       s1_valid;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            s1_same  <= 16'b0;
-            s1_diff  <= 16'b0;
-            s1_valid <= 1'b0;
+            s1_same_lo <= 8'b0;
+            s1_same_hi <= 8'b0;
+            s1_diff_lo <= 8'b0;
+            s1_diff_hi <= 8'b0;
+            s1_valid   <= 1'b0;
         end else begin
-            s1_same  <= s1_same_comb;
-            s1_diff  <= s1_diff_comb;
-            s1_valid <= valid_in;
+            s1_same_lo <= s1_same_comb[7:0];
+            s1_same_hi <= s1_same_comb[15:8];
+            s1_diff_lo <= s1_diff_comb[7:0];
+            s1_diff_hi <= s1_diff_comb[15:8];
+            s1_valid   <= valid_in;
         end
     end
 
     // -------------------------------------------------------------------
     // Stage 2: 4-level adder tree for 16 bits → 5-bit count
     // -------------------------------------------------------------------
+    // lo bank (bits 7:0) + hi bank (bits 15:8) each have 4 pairs.
     // 8 pairs → 4 × 2-bit sums → 2 × 3-bit sums → 1 × 4-bit sum → 5-bit total
     wire [1:0] sp0, sp1, sp2, sp3, sp4, sp5, sp6, sp7;
     wire [1:0] sn0, sn1, sn2, sn3, sn4, sn5, sn6, sn7;
-    assign sp0 = {1'b0, s1_same[0]}  + {1'b0, s1_same[1]};
-    assign sp1 = {1'b0, s1_same[2]}  + {1'b0, s1_same[3]};
-    assign sp2 = {1'b0, s1_same[4]}  + {1'b0, s1_same[5]};
-    assign sp3 = {1'b0, s1_same[6]}  + {1'b0, s1_same[7]};
-    assign sp4 = {1'b0, s1_same[8]}  + {1'b0, s1_same[9]};
-    assign sp5 = {1'b0, s1_same[10]} + {1'b0, s1_same[11]};
-    assign sp6 = {1'b0, s1_same[12]} + {1'b0, s1_same[13]};
-    assign sp7 = {1'b0, s1_same[14]} + {1'b0, s1_same[15]};
+    assign sp0 = {1'b0, s1_same_lo[0]} + {1'b0, s1_same_lo[1]};
+    assign sp1 = {1'b0, s1_same_lo[2]} + {1'b0, s1_same_lo[3]};
+    assign sp2 = {1'b0, s1_same_lo[4]} + {1'b0, s1_same_lo[5]};
+    assign sp3 = {1'b0, s1_same_lo[6]} + {1'b0, s1_same_lo[7]};
+    assign sp4 = {1'b0, s1_same_hi[0]} + {1'b0, s1_same_hi[1]};
+    assign sp5 = {1'b0, s1_same_hi[2]} + {1'b0, s1_same_hi[3]};
+    assign sp6 = {1'b0, s1_same_hi[4]} + {1'b0, s1_same_hi[5]};
+    assign sp7 = {1'b0, s1_same_hi[6]} + {1'b0, s1_same_hi[7]};
 
-    assign sn0 = {1'b0, s1_diff[0]}  + {1'b0, s1_diff[1]};
-    assign sn1 = {1'b0, s1_diff[2]}  + {1'b0, s1_diff[3]};
-    assign sn2 = {1'b0, s1_diff[4]}  + {1'b0, s1_diff[5]};
-    assign sn3 = {1'b0, s1_diff[6]}  + {1'b0, s1_diff[7]};
-    assign sn4 = {1'b0, s1_diff[8]}  + {1'b0, s1_diff[9]};
-    assign sn5 = {1'b0, s1_diff[10]} + {1'b0, s1_diff[11]};
-    assign sn6 = {1'b0, s1_diff[12]} + {1'b0, s1_diff[13]};
-    assign sn7 = {1'b0, s1_diff[14]} + {1'b0, s1_diff[15]};
+    assign sn0 = {1'b0, s1_diff_lo[0]} + {1'b0, s1_diff_lo[1]};
+    assign sn1 = {1'b0, s1_diff_lo[2]} + {1'b0, s1_diff_lo[3]};
+    assign sn2 = {1'b0, s1_diff_lo[4]} + {1'b0, s1_diff_lo[5]};
+    assign sn3 = {1'b0, s1_diff_lo[6]} + {1'b0, s1_diff_lo[7]};
+    assign sn4 = {1'b0, s1_diff_hi[0]} + {1'b0, s1_diff_hi[1]};
+    assign sn5 = {1'b0, s1_diff_hi[2]} + {1'b0, s1_diff_hi[3]};
+    assign sn6 = {1'b0, s1_diff_hi[4]} + {1'b0, s1_diff_hi[5]};
+    assign sn7 = {1'b0, s1_diff_hi[6]} + {1'b0, s1_diff_hi[7]};
 
     wire [4:0] cnt_pos_comb =
         ({3'b000, sp0} + {3'b000, sp1}) + ({3'b000, sp2} + {3'b000, sp3}) +
