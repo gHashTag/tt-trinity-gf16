@@ -1,0 +1,55 @@
+{
+  "doc_id": "TRI-1-VERIFY-20260515-TRIAD-X",
+  "workload": "W*=((1,2,3,4)->0x47C0)x100 + LFSR seed 0xBEEF",
+  "vector_count": 100,
+  "byte_stream_length": 200,
+  "gf16_encoding": "16-bit mini-float: sign[15] exp[14:9](bias=31) mant[8:0]",
+  "canonical_vector": {
+    "a": ["0x3E00(1.0)", "0x4000(2.0)", "0x4100(3.0)", "0x4200(4.0)"],
+    "b": ["0x3E00(1.0)", "0x4000(2.0)", "0x4100(3.0)", "0x4200(4.0)"],
+    "expected_result": "0x47C0 (30.0 = 1+4+9+16)"
+  },
+  "lfsr": {
+    "poly": "0x80000057",
+    "seed": "0x0000BEEF",
+    "width_bits": 32
+  },
+  "targets": {
+    "nano": {
+      "branch": "feat/nano-rtl-w15e",
+      "commit": "d238573",
+      "top": "tt_um_trinity_nano (1x1)",
+      "compile_status": "PASS",
+      "sim_status": "PASS (100/100)"
+    },
+    "mid": {
+      "branch": "main",
+      "commit": "31f46b1",
+      "top": "tt_um_ghtag_trinity_gf16 (8x2)",
+      "compile_status": "PASS",
+      "sim_status": "PASS (100/100)"
+    },
+    "max": {
+      "branch": "feat/max-rtl-w15e",
+      "commit": "5b27814",
+      "top": "tt_um_trinity_max (4x4)",
+      "compile_status": "PASS",
+      "sim_status": "PASS (100/100)"
+    }
+  },
+  "digests": {
+    "nano": "d3f9dd42b2d891763bd6aa2c1974dbbf27f4d854b44ed497a58f6a749174aac2",
+    "mid": "d3f9dd42b2d891763bd6aa2c1974dbbf27f4d854b44ed497a58f6a749174aac2",
+    "max": "d3f9dd42b2d891763bd6aa2c1974dbbf27f4d854b44ed497a58f6a749174aac2"
+  },
+  "cross_die_verdict": "PASS",
+  "digest_match": "SHA256(L_Nano) = SHA256(L_Mid) = SHA256(L_Max) = d3f9dd42b2d891763bd6aa2c1974dbbf27f4d854b44ed497a58f6a749174aac2",
+  "r7_falsification": "All three dies produce identical 200-byte output streams under W*. Any deviation in gf16_dot4 arithmetic across Nano/Mid/Max dies would produce a different digest. Verdict PASS falsifies the hypothesis that the dies differ.",
+  "r5_honest_disclosure": "All three simulation runs completed without errors. No PENDING targets. ICA-M-003 (4x4 router 4-bit DST extension) noted in trinity_router_4x4.v but does not affect the tile-0 gf16_dot4 arithmetic path exercised by W*.",
+  "iverilog_version": "Icarus Verilog version 12.0 (stable) ()",
+  "anchor": "phi^2 + phi^-2 = 3",
+  "doi": "10.5281/zenodo.19227877",
+  "date_utc": "2026-05-15",
+  "epic": "EPIC #61 W15-TT-E",
+  "wave": "Wave-24 RVR-018"
+}
