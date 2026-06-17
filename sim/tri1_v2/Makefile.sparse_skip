@@ -1,0 +1,31 @@
+# sim/tri1_v2/Makefile.sparse_skip — L-S34 Sparse-Skip MAC simulation gate
+# Apache-2.0 · TRI-1 v2
+#
+# Tests sparse_skip_mac: early-exit gate for GF16 MAC on zero trits.
+#
+#   make -f Makefile.sparse_skip         -> compile + run + check
+#   make -f Makefile.sparse_skip clean   -> remove artifacts
+
+ROOT := ../..
+SRC  := \
+  $(ROOT)/src/gf16_mul.v \
+  $(ROOT)/src/gf16_add.v \
+  $(ROOT)/src/gf16_dot4.v \
+  $(ROOT)/src/sparse_skip_mac.v \
+  tb_sparse_skip_mac.v
+
+LOG  := sparse_skip_mac.log
+VVP  := tb_sparse_skip_mac.vvp
+
+all: run
+
+$(VVP): $(SRC)
+	iverilog -g2012 -o $(VVP) $(SRC)
+
+run: $(VVP)
+	vvp $(VVP) | tee $(LOG)
+	@grep -q "SPARSE_SKIP_MAC_GREEN" $(LOG) || (echo "SPARSE_SKIP_MAC GATE FAILED" && exit 1)
+	@echo "SPARSE_SKIP_MAC GATE PASSED"
+
+clean:
+	rm -f $(VVP) $(LOG) *.vcd
