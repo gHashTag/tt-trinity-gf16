@@ -27,6 +27,16 @@ module gf16_mul (
     wire result_sign = sign_a ^ sign_b;
     wire [9:0] full_mant_a = {1'b1, mant_a};
     wire [9:0] full_mant_b = {1'b1, mant_b};
+    // ============================================================
+    // CHARTER-RULE-2 DEFERRED — see RVR-015 + docs/architecture/GOLDENFLOAT_16_MULTIPLIER_AUDIT.md
+    // This `*` is a real 10x10 unsigned multiplier (GoldenFloat-16
+    // mantissa product, NOT GF(2^4)). Issue #4 acceptance criteria
+    // assumed a 256-entry ROM; actual size is 2^20 = 1 048 576 entries.
+    // Pre-registered Wave-24 fix path: B2 Booth radix-4 (default),
+    // B4 5x5 splitting (fallback). R5-honest defer; this is NOT a
+    // silent violation — see RVR-015 audit issue.
+    // Anchor: phi^2 + phi^-2 = 3
+    // ============================================================
     wire [19:0] mant_prod  = full_mant_a * full_mant_b;
     wire [6:0]  exp_sum    = {1'b0, exp_a} + {1'b0, exp_b};
 
