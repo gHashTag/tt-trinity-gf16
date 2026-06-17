@@ -46,39 +46,30 @@ project:
   language:     "Verilog"
   clock_hz:     50000000
 
-  tiles: "8x2"  # bumped 2x2 -> 8x2 in PR #8 (Wave-26b SUPER-CROWN) to accommodate full Trinity SoC mini: 4 GF16 tiles + mesh + master FSM + 6 CROWN POST modules + 16x16 ternary matmul + BitNet encoder + BPB counter + BLAKE3 anchor + multi-tile RECEIPT + ALU-9 decoder + RING27 memory + phi-PLL + Wishbone-lite full. Target ~16000 gates @ 60% density on SKY130.
+  # ICA-M-005 FIX (W15-TT-E, 2026-05-15): MAX tile submission uses tt_um_trinity_max
+  # as top_module and includes the 4x4 mesh fabric files.  Mid tile (tt_um_ghtag_trinity_gf16)
+  # remains on the main branch; this branch targets MAX slot on TTSKY26b.
+  tiles: "4x4"  # MAX: 16-tile GF16 mesh, 4x4 tile footprint on TT board
 
-  top_module:  "tt_um_ghtag_trinity_gf16"
+  top_module:  "tt_um_trinity_max"
 
   source_files:
-    - "tt_um_ghtag_trinity_gf16.v"
-    - "gf16_mul.v"
-    - "gf16_add.v"
+    - "tt_um_trinity_max.v"
+    - "trinity_mesh_4x4.v"
+    - "trinity_router_4x4.v"
+    - "trinity_gf16_tile.v"
     - "gf16_dot4.v"
     - "gf16_dot8.v"
     - "gf16_dot4_sparse.v"
-    - "trinity_gf16_tile.v"
-    - "trinity_router_2x2.v"
-    - "trinity_mesh_2x2.v"
+    - "gf16_mul.v"
+    - "gf16_add.v"
     - "trinity_master_fsm.v"
     - "phi_anchor_post.v"
     - "lucas_rom.v"
     - "gf16_popcount.v"
     - "gf16_popcount16.v"
-    - "vsa_matmul_8x8.v"
-    - "crc32_receipt.v"
     - "hwrng_lfsr.v"
     - "wb_status_reg.v"
-    - "vsa_matmul_16x16.v"
-    - "bitnet_encoder.v"
-    - "bpb_counter.v"
-    - "blake3_anchor.v"
-    - "multi_tile_receipt.v"
-    - "alu9_decoder.v"
-    - "ring27_memory.v"
-    - "phi_pll_div.v"
-    - "wishbone_full.v"
-    - "gf16_mesh_2x2_top.v"
 
 pinout:
   ui[0]: "load_mode"
